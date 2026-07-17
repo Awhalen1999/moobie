@@ -1,0 +1,21 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"compatibility_date": "2026-07-17",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"name": "moobie-app",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "moobie",
+			"database_id": "541321e9-173c-4e57-b3f9-6f991a838c71"
+		}
+	]
+}

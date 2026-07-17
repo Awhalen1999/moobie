@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "moobie-poll",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-17",
+  "triggers": {
+    // Hourly, on the hour. Idempotent: a missed tick self-heals next run.
+    "crons": ["0 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "moobie",
+      "database_id": "541321e9-173c-4e57-b3f9-6f991a838c71"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

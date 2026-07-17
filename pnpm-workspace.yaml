@@ -1,0 +1,4 @@
+packages:
+  - "packages/*"
+  - "moobie-app"
+  - "moobie-poll"
