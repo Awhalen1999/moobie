@@ -19,18 +19,6 @@ export function getActiveUsers(db: D1Database): Promise<TrackedUser[]> {
     .then((r) => r.results);
 }
 
-/** How many entries we already hold for a user. Used to detect a first ingest. */
-export async function countEntriesForUser(
-  db: D1Database,
-  username: string,
-): Promise<number> {
-  const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM log_entries WHERE username = ?")
-    .bind(username)
-    .first<{ n: number }>();
-  return row?.n ?? 0;
-}
-
 /**
  * Insert parsed entries, skipping any whose guid we already have.
  * Returns only the rows that were actually inserted (the new ones), so callers

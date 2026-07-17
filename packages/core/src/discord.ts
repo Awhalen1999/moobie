@@ -1,6 +1,6 @@
-// Discord out (v1) — build an embed for a newly-logged film and POST it to the
-// channel webhook. The builder is pure (easy to eyeball and test); the POST is a
-// separate thin function. The poll loop calls announceEntry() once per new row.
+// Discord embeds — pure builders only (easy to eyeball and test). No delivery
+// lives here: sending happens in the bot (stage 2) via the Discord API with the
+// bot token. Embed JSON is identical either way, so these are ready as-is.
 
 import type { FilmComparison } from "./analytics.ts";
 import type { LogEntry } from "./types.ts";
@@ -69,31 +69,6 @@ export function buildEntryEmbed(
   if (fields.length > 0) embed.fields = fields;
 
   return embed;
-}
-
-/** Build the embed and POST it. Throws on a non-OK webhook response. */
-export async function announceEntry(
-  webhookUrl: string,
-  entry: LogEntry,
-  comparison: FilmComparison | null,
-): Promise<void> {
-  await postEmbed(webhookUrl, buildEntryEmbed(entry, comparison));
-}
-
-/** POST a single embed to a Discord channel webhook. */
-export async function postEmbed(
-  webhookUrl: string,
-  embed: DiscordEmbed,
-): Promise<void> {
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embeds: [embed] }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Discord webhook ${res.status}: ${body}`);
-  }
 }
 
 // --- helpers -------------------------------------------------------------

@@ -6,7 +6,13 @@ comparison against anyone else who has rated the same film (flagging
 disagreements). Data comes from each tracked user's public Letterboxd diary RSS
 feed — no official API, no live Discord gateway.
 
-See [`HANDOFF.md`](./HANDOFF.md) for the full spec.
+See [`HANDOFF.md`](./HANDOFF.md) for the full spec. The build is three stages,
+in order:
+
+1. **✅ Core backend** — schema, shared core package, RSS ingest, hourly poll.
+2. **Discord bot** — real bot token (never webhooks): announcements with rating
+   comparison + slash commands.
+3. **Frontend** — a few simple Astro pages over the same data.
 
 ## Layout
 
@@ -16,9 +22,9 @@ This is a pnpm workspace with one shared package and two Cloudflare deploys.
 moobie/
 ├── db/schema.sql        2 tables (tracked_users, log_entries)
 ├── packages/core/       @moobie/core — all shared logic:
-│                          db, letterboxd (RSS), analytics, discord
-├── moobie-poll/         hourly cron Worker: poll diaries → post new logs
-└── moobie-app/          Astro app on Cloudflare (API + web UI, Phase 8)
+│                          db, letterboxd (RSS), analytics, discord embeds
+├── moobie-poll/         hourly cron Worker: poll diaries → insert new logs
+└── moobie-app/          Astro app on Cloudflare (bot interactions + web UI; stages 2–3)
 ```
 
 Both deploys import `@moobie/core`, so there is exactly one copy of every query,
@@ -32,11 +38,11 @@ it — no build step, no drift.
 `letterboxd.com/{username}/rss/`, parses the diary entries (ignoring list items),
 and inserts anything new with `INSERT OR IGNORE` keyed on the RSS `<guid>`. That
 one UNIQUE constraint makes the whole loop idempotent: re-fetching the same
-entries is a no-op. Genuinely new rows are announced to a Discord channel
-webhook, oldest watch first, each with a rating-comparison embed.
+entries is a no-op.
 
-A user's very first poll is treated as a silent seed (their back-catalogue is
-stored but not announced) so adding someone doesn't flood the channel.
+The poll is currently ingest-only. Announcing new rows to Discord arrives with
+the bot in stage 2 — which also means the whole backlog is quietly in the DB
+before the bot comes online, so there's no first-announcement flood.
 
 ## Local development
 
@@ -47,8 +53,8 @@ pnpm install
 cd moobie-poll
 pnpm db:local
 
-# provide a webhook for local runs
-cp .dev.vars.example .dev.vars   # then edit the URL
+# set a local key for the on-demand /poll trigger
+cp .dev.vars.example .dev.vars
 
 # run the Worker and fire the cron on demand
 pnpm dev --test-scheduled
@@ -67,7 +73,7 @@ pnpm db:remote                     # from repo root
 
 # secrets (never committed)
 cd moobie-poll
-wrangler secret put DISCORD_WEBHOOK_URL
+wrangler secret put TRIGGER_KEY
 
 # ship the cron Worker
 pnpm deploy
@@ -78,6 +84,7 @@ The D1 binding (`DB`) and database id are configured in both
 
 ## Status
 
-v1 core is complete: poll → detect new logs → post to Discord with comparison
-(Phases 0–6). Still to come: Discord slash commands (`/interactions`), the web
-dashboard and API, and the post-MVP CSV history import.
+Stage 1 (core backend) is complete: hourly poll → parse → idempotent insert,
+with `compareFilm()` analytics and the Discord embed builders ready in core.
+Next up: stage 2, the Discord bot (announcements + slash commands), then the
+simple web frontend. CSV history import is post-MVP.

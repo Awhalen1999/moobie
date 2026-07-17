@@ -1,3 +1,4 @@
-# Copy to .dev.vars for local `wrangler dev`. Real values are set in production
-# with `wrangler secret put <NAME>` and never committed.
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
+# Copy to .dev.vars for local `wrangler dev`. The real value is set in production
+# with `wrangler secret put TRIGGER_KEY` and never committed.
+# Guards the on-demand GET /poll?key=... trigger endpoint.
+TRIGGER_KEY=pick-any-local-secret

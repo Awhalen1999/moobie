@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "moobie hourly cron Worker: poll Letterboxd diaries, post new logs to Discord.",
+  "description": "moobie hourly cron Worker: poll Letterboxd diaries, insert new logs into D1.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

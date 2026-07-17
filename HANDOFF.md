@@ -10,12 +10,23 @@
 A Discord bot + web dashboard for a friend group that logs films on Letterboxd.
 When someone logs a film, moobie posts it to Discord with their rating and a
 comparison against anyone else who's rated the same film (flagging disagreements).
-The website shows richer analytics — a node graph of who-watches-with-whom,
-rating agreement, common films, etc.
+The website shows simple stats on top of the same data.
 
 Data comes from each tracked user's **public Letterboxd diary RSS feed**
 (`letterboxd.com/{username}/rss/`). There is no official-API integration in v1
 and no live Discord gateway connection — the bot is HTTP/cron only.
+
+## The plan — three stages, in order
+
+1. **✅ Core backend** — schema, shared query module, RSS fetch, hourly poll
+   loop (ingest-only), analytics. Done and deployed. This is the foundation
+   everything else reads from; it stays simple and linear.
+2. **Discord bot** — a real bot (bot token) from day one. Announces new logs
+   with the rating comparison, plus slash commands via `/interactions`.
+   **No channel webhooks — that was never the plan.**
+3. **Frontend** — super simple. A few Astro pages over `/api/*`: recent
+   activity, per-film comparisons, basic per-user stats. Fancy visualizations
+   (node graph etc.) are post-MVP.
 
 ---
 
@@ -31,22 +42,21 @@ Two deploys, one D1 database.
 
 The separate Worker exists **only** because the Astro app can't run a cron
 trigger. All non-cron logic lives in the Astro app. Both deploys import the
-same shared `lib/` modules (DB queries, RSS fetch, analytics) so there is no
-duplicated logic.
+same shared `@moobie/core` package (DB queries, RSS fetch, analytics, embed
+builders) so there is no duplicated logic.
 
 ---
 
 ## Tech stack
 
 - **Astro + Tailwind** — frontend
-- **TanStack Router + Query** — client routing / data fetching
 - **Astro server endpoints** (`/api/*`, `/interactions`) with `export const prerender = false`
 - **Cloudflare D1** — binding name `DB`
 - **`@astrojs/cloudflare` adapter** — targets Workers
 - **Config lives in `wrangler.jsonc`**
 - **D1 access:** `import { env } from "cloudflare:workers"` inside server endpoints; `prerender = false` on D1-touching endpoints
 - **Poll Worker cron:** `0 * * * *` (every 60 min)
-- **Discord out:** channel webhook (v1) → real bot token (v2)
+- **Discord out:** bot token, plain REST `POST /channels/{id}/messages` — no webhooks
 - **Discord in:** Astro `/interactions` route, Ed25519-verified
 - **Secrets:** via `wrangler secret put` (never in the repo)
 - **Local dev:** must run under `wrangler dev`
@@ -92,19 +102,53 @@ is idempotent.
 
 ---
 
-## Build order
+## Stage 1 — Core backend ✅ (as built)
 
-- **Phase 0 — Scaffold.** Astro app, poll Worker, `d1 create moobie`, bind to both.
-- **Phase 1 — Data layer.** `schema.sql`, shared query module; all writes `INSERT OR IGNORE`.
-- **Phase 2 — Fetch layer.** `getRecentEntries(username)`, RSS only, behind one function.
-- **Phase 3 — Poll loop.** `scheduled()` → active users → fetch → insert → post new rows.
-- **Phase 4 — Analytics.** `compareFilm(filmKey)` + growth room; pure functions.
-- **Phase 5 — Discord out.** Build embed (poster, rating, comparison), POST to webhook.
-- **✅ Phase 6 — CHECKPOINT: v1 core is live.** Poll → detect → post with comparison.
-- **Phase 7 — Discord in.** `/interactions` route, Ed25519 on raw body, slash commands.
-- **Phase 8 — Frontend.** Astro + Tailwind + TanStack, `/api/*`, node graph + stats.
-- **Phase 9 — Ship.** Point `moobie.awln.dev` at the app; register commands; e2e verify.
-- **Phase 10 — Post-MVP.** Bulk CSV history import; richer analytics.
+Poll → parse → store. Nothing else. Deployed and ingesting hourly.
+
+- `db/schema.sql` — the 2 tables above, plus film_key / username indexes.
+- `@moobie/core/db` — the single DB module (invariant #7); every function takes
+  the `D1Database` binding as its first arg, all writes `INSERT OR IGNORE`.
+- `@moobie/core/letterboxd` — `getRecentEntries(username)`, RSS behind one
+  function (invariant #3). `fast-xml-parser`, watches filtered by
+  `<letterboxd:watchedDate>`, `film_key` = the film's global Letterboxd slug.
+- `@moobie/core/analytics` — `compareFilm()` + growth room; pure functions
+  (invariant #4).
+- `@moobie/core/discord` — **pure embed builders only** (`buildEntryEmbed`,
+  `stars`). No delivery code in core; the bot owns sending.
+- `moobie-poll` — `scheduled()` → active users → fetch → insert; one user's
+  failed feed never stops the rest. Also a `TRIGGER_KEY`-guarded `GET /poll`
+  for on-demand runs.
+
+Because stage 1 ingests silently, the whole backlog is already in the DB before
+the bot exists — no announcement flood when stage 2 ships.
+
+## Stage 2 — Discord bot
+
+Real bot token from the start. No webhooks at any point.
+
+- Create the Discord app + bot; invite to the guild.
+- **Announce:** poll Worker posts each genuinely new row (oldest watch first)
+  via `POST /channels/{id}/messages` with the bot token, using
+  `buildEntryEmbed(entry, compareFilm(...))` from core.
+- **Silent seed:** a user's *first* ingest is stored but never announced, so
+  adding someone doesn't flood the channel.
+- **Slash commands:** Astro `/interactions` route. Ed25519 verification on the
+  **raw body**, before any JSON parsing. Start with `/track <username>`,
+  `/untrack`, `/film <title>` (comparison), `/stats`.
+- Command registration script (guild-scoped) using `DISCORD_APP_ID` + `DISCORD_GUILD_ID`.
+
+## Stage 3 — Frontend (super simple)
+
+- Astro + Tailwind pages over `/api/*` server endpoints (`prerender = false`).
+- v1 pages: recent activity feed, film page (everyone's ratings + disagreement),
+  per-user page. That's it.
+- Point `moobie.awln.dev` at the app; e2e verify.
+
+## Post-MVP
+
+- Bulk CSV history import (full back-history).
+- Richer analytics: who-watches-with-whom node graph, taste-similarity scores.
 
 ---
 
@@ -115,11 +159,12 @@ is idempotent.
 3. **Fetch is RSS behind one function** — clean boundary, no API impl in v1.
 4. **Analytics are plain pure functions** — shared across Discord + web; never coupled to a route.
 5. **Poll is idempotent + stateless** — re-fetching the same entries is safe; no retry logic.
-6. **Ed25519 verification runs on the raw body** — before any JSON parsing.
-7. **One shared DB query module** — imported by both deploys; no duplication.
-8. **D1 via the `DB` binding**, `prerender = false` on D1-touching endpoints, config in `wrangler.jsonc`, local dev via `wrangler dev`.
-9. **CSV import is post-MVP** — not in v1.
-10. **Secrets never land in the repo.**
+6. **Discord delivery uses the bot token** — never channel webhooks.
+7. **Ed25519 verification runs on the raw body** — before any JSON parsing.
+8. **One shared DB query module** — imported by both deploys; no duplication.
+9. **D1 via the `DB` binding**, `prerender = false` on D1-touching endpoints, config in `wrangler.jsonc`, local dev via `wrangler dev`.
+10. **CSV import is post-MVP** — not in v1.
+11. **Secrets never land in the repo.**
 
 ---
 
@@ -134,20 +179,22 @@ is idempotent.
 
 ## Secrets checklist
 
-| secret                 | used by        | when       |
-|------------------------|----------------|------------|
-| `DISCORD_WEBHOOK_URL`  | poll Worker    | v1         |
-| `DISCORD_PUBLIC_KEY`   | app            | v2 (verify)|
-| `DISCORD_BOT_TOKEN`    | app + Worker   | v2         |
-| `DISCORD_APP_ID`       | app + scripts  | v2         |
-| `DISCORD_GUILD_ID`     | app + scripts  | v2         |
+| secret                 | used by        | stage |
+|------------------------|----------------|-------|
+| `TRIGGER_KEY`          | poll Worker    | 1     |
+| `DISCORD_BOT_TOKEN`    | poll Worker + app | 2  |
+| `DISCORD_PUBLIC_KEY`   | app (`/interactions` verify) | 2 |
+| `DISCORD_APP_ID`       | app + scripts  | 2     |
+| `DISCORD_GUILD_ID`     | app + scripts  | 2     |
+| `DISCORD_CHANNEL_ID`   | poll Worker (announce target) | 2 |
 
 ---
 
 ## Implementation notes (as built)
 
 - The shared `lib/` is a workspace package, `@moobie/core`, imported by both
-  deploys — the spec's "cleanest long-term option" for invariant #7.
+  deploys — the cleanest way to satisfy invariant #8. It ships raw TypeScript;
+  each deploy's bundler transpiles it — no build step, no drift.
 - `film_key` is the film's **global Letterboxd slug** (from the entry link,
   e.g. `toy-story-4`), which every user shares for the same film — more reliable
   than title+year.
@@ -155,4 +202,3 @@ is idempotent.
   `<letterboxd:watchedDate>`, which is the filter.
 - The XML is parsed with `fast-xml-parser` (no DOMParser in Workers), with
   `htmlEntities` on so numeric references like `&#039;` decode.
-- A user's first poll is a **silent seed** to avoid flooding the channel.
