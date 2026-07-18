@@ -262,6 +262,7 @@ async function reviewCard(
       avatarUrl,
       displayNames,
       reviewMax: REVIEW_LOOKUP_MAX,
+      includeGap: false,
     }),
   );
 }
