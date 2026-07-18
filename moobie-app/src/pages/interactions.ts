@@ -111,7 +111,9 @@ async function finishTrack(
       `[letterboxd.com/${username}](https://letterboxd.com/${username}/)). ` +
       `Stored ${inserted.length} recent ${inserted.length === 1 ? "entry" : "entries"} quietly — ` +
       `new logs will be announced automatically.`;
-  } catch {
+  } catch (err) {
+    // Reply stays friendly; the real error goes to the logs for forensics.
+    console.error(`moobie-app: /track failed for "${username}":`, err);
     content =
       `Couldn't read \`letterboxd.com/${username}/rss/\` — ` +
       `check the spelling, and that the account's diary is public.`;

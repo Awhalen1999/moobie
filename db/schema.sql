@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS tracked_users (
   display_name    TEXT,               -- friendly name for cards, display-only; nullable
   avatar_url      TEXT,               -- Letterboxd pfp; fetched lazily, nullable
   active          INTEGER NOT NULL DEFAULT 1,  -- 1/0 soft-disable
-  last_seen_guid  TEXT,               -- optional optimization; dedup is by guid regardless
   added_at        TEXT NOT NULL       -- ISO timestamp
 );
 

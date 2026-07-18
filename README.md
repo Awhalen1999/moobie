@@ -10,8 +10,8 @@ See [`HANDOFF.md`](./HANDOFF.md) for the full spec. The build is three stages,
 in order:
 
 1. **✅ Core backend** — schema, shared core package, RSS ingest, hourly poll.
-2. **Discord bot** — real bot token (never webhooks): announcements with rating
-   comparison + slash commands.
+2. **Discord bot** — real bot token (never webhooks). Announcements and
+   `/track` + `/untrack` are live; `/film`, `/stats`, `/refresh`, `/vs` next.
 3. **Frontend** — a few simple Astro pages over the same data.
 
 ## Layout
@@ -40,9 +40,12 @@ and inserts anything new with `INSERT OR IGNORE` keyed on the RSS `<guid>`. That
 one UNIQUE constraint makes the whole loop idempotent: re-fetching the same
 entries is a no-op.
 
-The poll is currently ingest-only. Announcing new rows to Discord arrives with
-the bot in stage 2 — which also means the whole backlog is quietly in the DB
-before the bot comes online, so there's no first-announcement flood.
+Each genuinely new row is announced to every Discord channel in
+`DISCORD_ANNOUNCE_CHANNEL_IDS` (config in `moobie-poll/wrangler.jsonc`), posted
+as the bot with a rating-comparison card — poster, Letterboxd pfp, liked heart,
+and anyone else's rating of the same film. A user's first ingest is a silent
+seed, so `/track`-ing someone never floods the channel. Slash commands arrive
+at the Astro app's Ed25519-verified `/interactions` endpoint.
 
 ## Local development
 
@@ -74,9 +77,17 @@ pnpm db:remote                     # from repo root
 # secrets (never committed)
 cd moobie-poll
 wrangler secret put TRIGGER_KEY
+wrangler secret put DISCORD_BOT_TOKEN
 
 # ship the cron Worker
 pnpm deploy
+
+# ship the Astro app (interactions + web)
+cd ../moobie-app
+pnpm deploy
+
+# register / update slash commands (guild-scoped, instant)
+DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs
 ```
 
 The D1 binding (`DB`) and database id are configured in both
@@ -84,7 +95,8 @@ The D1 binding (`DB`) and database id are configured in both
 
 ## Status
 
-Stage 1 (core backend) is complete: hourly poll → parse → idempotent insert,
-with `compareFilm()` analytics and the Discord embed builders ready in core.
-Next up: stage 2, the Discord bot (announcements + slash commands), then the
-simple web frontend. CSV history import is post-MVP.
+Stage 1 (core backend) is complete. Stage 2 (Discord bot) is live: hourly
+announcements with comparison cards, plus `/track` and `/untrack` via the
+Ed25519-verified `/interactions` endpoint. Remaining stage-2 commands:
+`/film`, `/stats`, `/refresh`, `/vs`. Then the simple web frontend (stage 3).
+CSV history import is post-MVP. See HANDOFF.md for the "Moving servers" runbook.

@@ -33,6 +33,5 @@ export interface TrackedUser {
   display_name: string | null; // display-only; username is the identity everywhere
   avatar_url: string | null;
   active: number; // 0 | 1
-  last_seen_guid: string | null;
   added_at: string;
 }

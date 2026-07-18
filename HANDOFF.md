@@ -77,7 +77,6 @@ No `films` table. Film fields are **denormalized** into `log_entries`.
 | display_name    | TEXT    | friendly name for cards; display-only, never a lookup key; nullable |
 | avatar_url      | TEXT    | Letterboxd pfp for embeds; fetched lazily; nullable |
 | active          | INTEGER | 1/0, soft-disable without deleting rows  |
-| last_seen_guid  | TEXT    | optional optimization; dedup is by guid regardless |
 | added_at        | TEXT    | ISO timestamp                            |
 
 ### `log_entries`
@@ -186,8 +185,29 @@ Real bot token from the start. No webhooks at any point.
 - **History only from launch forward.** Full back-history depends on the post-MVP CSV importer.
 - **Private / draft / close-friends entries never appear** in public RSS.
 - **No clean film IDs from RSS** — `film_key` is the film's global slug, which can in principle collide. Acceptable at this scale.
+- **Editing a log to add a review re-ingests it once.** Letterboxd renames the
+  entry's guid (`letterboxd-watch-…` → `letterboxd-review-…`), so it looks new:
+  one repeat announcement + one duplicate row. Comparisons are unaffected (they
+  collapse to each user's latest watch); count-style stats run one high.
+  Accepted — new watches always create new rows by design; only this edit case
+  double-counts, and heuristic dedup isn't worth the risk.
 
 ---
+
+## Moving servers (runbook)
+
+One data pool; servers are just places moobie speaks. To move (or add) a server:
+
+1. **Invite the bot** — OAuth URL (App ID + `bot applications.commands` scopes +
+   View Channels / Send Messages / Embed Links). Private bot: only the owner can
+   authorize, and needs Manage Server in the target.
+2. **Announce target** — edit `DISCORD_ANNOUNCE_CHANNEL_IDS` in
+   `moobie-poll/wrangler.jsonc` (comma-separated; add for both, replace to move),
+   then `wrangler deploy` from `moobie-poll/`.
+3. **Slash commands** — `DISCORD_BOT_TOKEN=… DISCORD_GUILD_ID=<new server> node
+   scripts/register-commands.mjs` (guild-scoped, instant).
+4. Optionally kick the bot from the old server. Nothing else changes: DB, token,
+   public key, app ID, and the Astro app deploy are all server-agnostic.
 
 ## Secrets checklist
 
