@@ -19,6 +19,14 @@ export function getActiveUsers(db: D1Database): Promise<TrackedUser[]> {
     .then((r) => r.results);
 }
 
+/** Every tracked user, active or not — for display-name lookups over history. */
+export function getAllTrackedUsers(db: D1Database): Promise<TrackedUser[]> {
+  return db
+    .prepare("SELECT * FROM tracked_users ORDER BY username")
+    .all<TrackedUser>()
+    .then((r) => r.results);
+}
+
 /** How many entries we already hold for a user. Used to detect a first ingest. */
 export async function countEntriesForUser(
   db: D1Database,
@@ -91,6 +99,85 @@ export function getEntriesByFilmKey(
     )
     .bind(filmKey)
     .all<LogEntry>()
+    .then((r) => r.results);
+}
+
+/** One user's whole history, newest watch first. */
+export function getEntriesForUser(
+  db: D1Database,
+  username: string,
+): Promise<LogEntry[]> {
+  return db
+    .prepare(
+      "SELECT * FROM log_entries WHERE username = ? ORDER BY watched_date DESC",
+    )
+    .bind(username)
+    .all<LogEntry>()
+    .then((r) => r.results);
+}
+
+export interface FilmSearchHit {
+  film_key: string;
+  film_title: string;
+  entries: number;
+}
+
+/** Films whose title contains the query, most-logged first. */
+export function searchFilms(
+  db: D1Database,
+  query: string,
+  limit = 3,
+): Promise<FilmSearchHit[]> {
+  return db
+    .prepare(
+      `SELECT film_key, film_title, COUNT(*) AS entries
+       FROM log_entries
+       WHERE film_title LIKE ?
+       GROUP BY film_key
+       ORDER BY entries DESC, film_title
+       LIMIT ?`,
+    )
+    .bind(`%${query}%`, limit)
+    .all<FilmSearchHit>()
+    .then((r) => r.results);
+}
+
+export interface UserStats {
+  username: string;
+  entries: number;
+  films: number; // distinct films
+  average: number | null; // null if nothing rated
+  liked: number;
+  rewatches: number;
+}
+
+const STATS_COLUMNS = `
+  COUNT(*)                  AS entries,
+  COUNT(DISTINCT film_key)  AS films,
+  ROUND(AVG(rating), 2)     AS average,
+  SUM(liked)                AS liked,
+  SUM(rewatch)              AS rewatches`;
+
+/** Aggregate stats for one user; null if they have no entries at all. */
+export async function getUserStats(
+  db: D1Database,
+  username: string,
+): Promise<UserStats | null> {
+  const row = await db
+    .prepare(`SELECT username, ${STATS_COLUMNS} FROM log_entries WHERE username = ?`)
+    .bind(username)
+    .first<UserStats>();
+  return row && row.entries > 0 ? row : null;
+}
+
+/** Aggregate stats for everyone with entries, most logs first. */
+export function getGroupStats(db: D1Database): Promise<UserStats[]> {
+  return db
+    .prepare(
+      `SELECT username, ${STATS_COLUMNS} FROM log_entries
+       GROUP BY username ORDER BY entries DESC`,
+    )
+    .all<UserStats>()
     .then((r) => r.results);
 }
 

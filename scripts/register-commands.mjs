@@ -42,6 +42,52 @@ const commands = [
       },
     ],
   },
+  {
+    name: "film",
+    description: "How everyone rated a film",
+    options: [
+      {
+        type: STRING,
+        name: "title",
+        description: "Film title to look up",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "stats",
+    description: "Watching stats — the group's, or one person's",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Letterboxd username (optional)",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "vs",
+    description: "Head-to-head taste comparison between two people",
+    options: [
+      {
+        type: STRING,
+        name: "user1",
+        description: "First Letterboxd username",
+        required: true,
+      },
+      {
+        type: STRING,
+        name: "user2",
+        description: "Second Letterboxd username",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "refresh",
+    description: "Check Letterboxd for new logs right now",
+  },
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

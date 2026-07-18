@@ -64,7 +64,84 @@ export function compareFilm(
   };
 }
 
+/** Head-to-head taste comparison between two users (see compareUsers). */
+export interface HeadToHead {
+  shared: number; // films both have logged
+  bothRated: number; // shared films where both left a rating
+  agreementPct: number | null; // % of bothRated within 1 star; null if none
+  avgGap: number | null; // mean |ratingA - ratingB| over bothRated
+  biggest: {
+    film_title: string;
+    film_year: number | null;
+    a: number; // user A's rating
+    b: number; // user B's rating
+    gap: number;
+  } | null;
+}
+
+/**
+ * Compare two users' taste across every film they've both logged. Pass each
+ * user's full history; rewatches collapse to their most recent rating per film.
+ */
+export function compareUsers(
+  entriesA: LogEntry[],
+  entriesB: LogEntry[],
+): HeadToHead {
+  const filmsA = latestPerFilm(entriesA);
+  const filmsB = latestPerFilm(entriesB);
+
+  const result: HeadToHead = {
+    shared: 0,
+    bothRated: 0,
+    agreementPct: null,
+    avgGap: null,
+    biggest: null,
+  };
+
+  let gapSum = 0;
+  let withinOneStar = 0;
+
+  for (const [filmKey, a] of filmsA) {
+    const b = filmsB.get(filmKey);
+    if (!b) continue;
+    result.shared++;
+    if (a.rating === null || b.rating === null) continue;
+
+    result.bothRated++;
+    const gap = Math.abs(a.rating - b.rating);
+    gapSum += gap;
+    if (gap <= 1) withinOneStar++;
+    if (!result.biggest || gap > result.biggest.gap) {
+      result.biggest = {
+        film_title: a.film_title,
+        film_year: a.film_year,
+        a: a.rating,
+        b: b.rating,
+        gap,
+      };
+    }
+  }
+
+  if (result.bothRated > 0) {
+    result.agreementPct = Math.round((withinOneStar / result.bothRated) * 100);
+    result.avgGap = Math.round((gapSum / result.bothRated) * 100) / 100;
+  }
+  return result;
+}
+
 // --- helpers -------------------------------------------------------------
+
+/** Collapse a user's history to one row per film (their most recent watch). */
+function latestPerFilm(entries: LogEntry[]): Map<string, LogEntry> {
+  const byFilm = new Map<string, LogEntry>();
+  for (const e of entries) {
+    const current = byFilm.get(e.film_key);
+    if (!current || isNewer(e, current)) {
+      byFilm.set(e.film_key, e);
+    }
+  }
+  return byFilm;
+}
 
 /** Collapse to one row per user (their most recent watch), newest user first. */
 function latestPerUser(entries: LogEntry[]): UserRating[] {

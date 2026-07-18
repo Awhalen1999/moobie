@@ -10,10 +10,22 @@ import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
 import {
   addTrackedUser,
+  buildFilmEmbed,
+  compareFilm,
+  compareUsers,
   deactivateTrackedUser,
+  getAllTrackedUsers,
   getAvatarUrl,
+  getEntriesByFilmKey,
+  getEntriesForUser,
+  getGroupStats,
   getRecentEntries,
+  getUserStats,
   insertEntries,
+  searchFilms,
+  stars,
+  type DiscordEmbed,
+  type UserStats,
 } from "@moobie/core";
 
 export const prerender = false;
@@ -28,6 +40,8 @@ const DEFERRED_MESSAGE = 5;
 interface Env {
   DB: D1Database;
   DISCORD_PUBLIC_KEY: string;
+  MOOBIE_POLL_URL: string; // the poll Worker, for /refresh
+  TRIGGER_KEY: string; // secret shared with the poll Worker
 }
 
 const env = workerEnv as unknown as Env;
@@ -65,10 +79,18 @@ export const POST: APIRoute = async ({ request }) => {
         return track(interaction);
       case "untrack":
         return untrack(interaction);
+      case "film":
+        return film(interaction);
+      case "stats":
+        return statsCommand(interaction);
+      case "vs":
+        return versus(interaction);
+      case "refresh":
+        return refresh(interaction);
     }
   }
 
-  return json({ type: MESSAGE, data: { content: "moobie doesn't know that one." } });
+  return msg("moobie doesn't know that one.");
 };
 
 // --- commands --------------------------------------------------------------
@@ -135,7 +157,138 @@ async function untrack(interaction: Interaction): Promise<Response> {
   });
 }
 
+/** /film <title> — how everyone rated one film. */
+async function film(interaction: Interaction): Promise<Response> {
+  const query = option(interaction, "title")?.trim();
+  if (!query) return msg("Give me a film title to look up.");
+
+  const [match] = await searchFilms(env.DB, query, 1);
+  if (!match) return msg(`Nobody's logged anything matching “${query}” yet.`);
+
+  const comparison = compareFilm(await getEntriesByFilmKey(env.DB, match.film_key));
+  if (!comparison) return msg(`Nobody's logged anything matching “${query}” yet.`);
+
+  return embeds(buildFilmEmbed(comparison, { displayNames: await displayNames() }));
+}
+
+/** /stats [username] — one person's numbers, or the whole group's. */
+async function statsCommand(interaction: Interaction): Promise<Response> {
+  const username = option(interaction, "username")?.trim().toLowerCase();
+  const names = await displayNames();
+
+  if (username) {
+    const userStats = await getUserStats(env.DB, username);
+    if (!userStats) return msg(`No entries for **${username}** yet.`);
+    return embeds({
+      title: `${names[username] ?? username} — stats`,
+      description: statsLine(userStats),
+      color: MOOBIE_GREEN,
+    });
+  }
+
+  const group = await getGroupStats(env.DB);
+  if (group.length === 0) return msg("Nothing logged yet — `/track` someone first.");
+  return embeds({
+    title: "moobie stats",
+    description: group
+      .map((s) => `**${names[s.username] ?? s.username}**\n${statsLine(s)}`)
+      .join("\n\n"),
+    color: MOOBIE_GREEN,
+  });
+}
+
+function statsLine(s: UserStats): string {
+  const avg = s.average !== null ? `avg ${s.average}` : "nothing rated";
+  return `🎬 ${s.films} films (${s.entries} logs) · ⭐ ${avg} · ❤️ ${s.liked} · 🔁 ${s.rewatches}`;
+}
+
+/** /vs <user1> <user2> — head-to-head taste comparison. */
+async function versus(interaction: Interaction): Promise<Response> {
+  const u1 = option(interaction, "user1")?.trim().toLowerCase() ?? "";
+  const u2 = option(interaction, "user2")?.trim().toLowerCase() ?? "";
+  if (u1 === u2) return msg("That's just one person agreeing with themselves.");
+
+  const [a, b] = await Promise.all([
+    getEntriesForUser(env.DB, u1),
+    getEntriesForUser(env.DB, u2),
+  ]);
+  if (a.length === 0) return msg(`No entries for **${u1}** yet.`);
+  if (b.length === 0) return msg(`No entries for **${u2}** yet.`);
+
+  const names = await displayNames();
+  const nameA = names[u1] ?? u1;
+  const nameB = names[u2] ?? u2;
+
+  const h = compareUsers(a, b);
+  if (h.shared === 0) {
+    return msg(`**${nameA}** and **${nameB}** have no films in common yet.`);
+  }
+
+  const lines = [`🎬 **${h.shared}** films in common — **${h.bothRated}** rated by both`];
+  if (h.agreementPct !== null) {
+    lines.push(`🤝 within one star on **${h.agreementPct}%** · average gap **${h.avgGap}**`);
+  }
+
+  const embed: DiscordEmbed = {
+    title: `${nameA} vs ${nameB}`,
+    description: lines.join("\n"),
+    color: h.biggest && h.biggest.gap >= 1.5 ? 0xff8000 : MOOBIE_GREEN,
+  };
+  if (h.biggest && h.biggest.gap > 0) {
+    const filmName = h.biggest.film_year
+      ? `${h.biggest.film_title} (${h.biggest.film_year})`
+      : h.biggest.film_title;
+    embed.fields = [
+      {
+        name: "Biggest disagreement",
+        value: `**${filmName}** — ${nameA} ${stars(h.biggest.a)} vs ${nameB} ${stars(h.biggest.b)}`,
+      },
+    ];
+  }
+  return embeds(embed);
+}
+
+/** /refresh — run a poll right now instead of waiting for the top of the hour. */
+function refresh(interaction: Interaction): Response {
+  waitUntil(finishRefresh(interaction));
+  return json({ type: DEFERRED_MESSAGE });
+}
+
+async function finishRefresh(interaction: Interaction): Promise<void> {
+  let content: string;
+  try {
+    const res = await fetch(`${env.MOOBIE_POLL_URL}/poll?key=${env.TRIGGER_KEY}`);
+    if (!res.ok) throw new Error(`poll trigger ${res.status}`);
+    const s = (await res.json()) as { users: number; inserted: number; announced: number };
+    const diaries = s.users === 1 ? "diary" : "diaries";
+    content =
+      s.inserted === 0
+        ? `✅ Checked ${s.users} ${diaries} — nothing new.`
+        : `✅ Checked ${s.users} ${diaries} — ${s.inserted} new, ${s.announced} announced.`;
+  } catch (err) {
+    console.error("moobie-app: /refresh failed:", err);
+    content = "Couldn't reach the poll Worker — try again in a minute.";
+  }
+  await editReply(interaction, content);
+}
+
 // --- plumbing ---------------------------------------------------------------
+
+const MOOBIE_GREEN = 0x00e054;
+
+/** username -> display name for everyone ever tracked (fallback: username). */
+async function displayNames(): Promise<Record<string, string>> {
+  const users = await getAllTrackedUsers(env.DB);
+  return Object.fromEntries(users.map((u) => [u.username, u.display_name ?? u.username]));
+}
+
+function msg(content: string): Response {
+  return json({ type: MESSAGE, data: { content } });
+}
+
+function embeds(...list: DiscordEmbed[]): Response {
+  return json({ type: MESSAGE, data: { embeds: list } });
+}
 
 /** Verify Discord's Ed25519 signature over timestamp+rawBody (WebCrypto). */
 async function verifySignature(

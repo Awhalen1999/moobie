@@ -98,6 +98,40 @@ export function buildEntryEmbed(
   return embed;
 }
 
+/**
+ * Card for /film — one film across the whole group. Small poster (it's a
+ * lookup card, not an announcement), one line per rater, summary in the footer.
+ */
+export function buildFilmEmbed(
+  comparison: FilmComparison,
+  context: EmbedContext = {},
+): DiscordEmbed {
+  const { displayNames = {} } = context;
+  const name = (username: string) => displayNames[username] ?? username;
+
+  const summary = [
+    `${comparison.ratings.length} watched`,
+    comparison.average !== null ? `avg ${comparison.average}` : "",
+    comparison.spread !== null ? `${comparison.spread} apart` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const embed: DiscordEmbed = {
+    title: comparison.film_year
+      ? `${comparison.film_title} (${comparison.film_year})`
+      : comparison.film_title,
+    url: `https://letterboxd.com/film/${comparison.film_key}/`,
+    description: comparison.ratings
+      .map((r) => `**${name(r.username)}** — ${stars(r.rating)}`)
+      .join("\n"),
+    color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
+    footer: { text: summary },
+  };
+  if (comparison.poster_url) embed.thumbnail = { url: comparison.poster_url };
+  return embed;
+}
+
 const API_BASE = "https://discord.com/api/v10";
 
 /** POST one embed to a channel as the bot. Throws on a non-OK response. */

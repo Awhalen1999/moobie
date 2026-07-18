@@ -13,7 +13,9 @@
 	},
 	"vars": {
 		// Verifies Discord's Ed25519 signature on /interactions. Public, not a secret.
-		"DISCORD_PUBLIC_KEY": "0d642e6c8f80ddd76044a148b2051741a3b7a2c969148a3383c9070f121e0f3b"
+		"DISCORD_PUBLIC_KEY": "0d642e6c8f80ddd76044a148b2051741a3b7a2c969148a3383c9070f121e0f3b",
+		// The poll Worker — /refresh triggers it (with the TRIGGER_KEY secret).
+		"MOOBIE_POLL_URL": "https://moobie-poll.awhalendev.workers.dev"
 	},
 	"d1_databases": [
 		{
