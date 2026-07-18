@@ -134,13 +134,13 @@ async function finishTrack(
     content =
       `🎬 Now tracking **${shown}** (` +
       `[letterboxd.com/${username}](https://letterboxd.com/${username}/)). ` +
-      `Stored ${inserted.length} recent ${inserted.length === 1 ? "entry" : "entries"} quietly — ` +
+      `Stored ${inserted.length} recent ${inserted.length === 1 ? "entry" : "entries"} quietly - ` +
       `new logs will be announced automatically.`;
   } catch (err) {
     // Reply stays friendly; the real error goes to the logs for forensics.
     console.error(`moobie-app: /track failed for "${username}":`, err);
     content =
-      `Couldn't read \`letterboxd.com/${username}/rss/\` — ` +
+      `Couldn't read \`letterboxd.com/${username}/rss/\` - ` +
       `check the spelling, and that the account's diary is public.`;
   }
   await editReply(interaction, content);
@@ -206,14 +206,14 @@ async function statsCommand(interaction: Interaction): Promise<Response> {
     const userStats = await getUserStats(env.DB, username);
     if (!userStats) return msg(`No entries for **${username}** yet.`);
     return embeds({
-      title: `${names[username] ?? username} — stats`,
+      title: `${names[username] ?? username} - stats`,
       description: statsLine(userStats),
       color: MOOBIE_GREEN,
     });
   }
 
   const group = await getGroupStats(env.DB);
-  if (group.length === 0) return msg("Nothing logged yet — `/track` someone first.");
+  if (group.length === 0) return msg("Nothing logged yet - `/track` someone first.");
   return embeds({
     title: "moobie stats",
     description: group
@@ -251,7 +251,7 @@ async function versus(interaction: Interaction): Promise<Response> {
     return msg(`**${nameA}** and **${nameB}** have no films in common yet.`);
   }
 
-  const lines = [`🎬 **${h.shared}** films in common — **${h.bothRated}** rated by both`];
+  const lines = [`🎬 **${h.shared}** films in common - **${h.bothRated}** rated by both`];
   if (h.agreementPct !== null) {
     lines.push(`🤝 within one star on **${h.agreementPct}%** · average gap **${h.avgGap}**`);
   }
@@ -268,7 +268,7 @@ async function versus(interaction: Interaction): Promise<Response> {
     embed.fields = [
       {
         name: "Biggest disagreement",
-        value: `**${filmName}** — ${nameA} ${stars(h.biggest.a)} vs ${nameB} ${stars(h.biggest.b)}`,
+        value: `**${filmName}** - ${nameA} ${stars(h.biggest.a)} vs ${nameB} ${stars(h.biggest.b)}`,
       },
     ];
   }
@@ -290,11 +290,11 @@ async function finishRefresh(interaction: Interaction): Promise<void> {
     const diaries = s.users === 1 ? "diary" : "diaries";
     content =
       s.inserted === 0
-        ? `✅ Checked ${s.users} ${diaries} — nothing new.`
-        : `✅ Checked ${s.users} ${diaries} — ${s.inserted} new, ${s.announced} announced.`;
+        ? `✅ Checked ${s.users} ${diaries} - nothing new.`
+        : `✅ Checked ${s.users} ${diaries} - ${s.inserted} new, ${s.announced} announced.`;
   } catch (err) {
     console.error("moobie-app: /refresh failed:", err);
-    content = "Couldn't reach the poll Worker — try again in a minute.";
+    content = "Couldn't reach the poll Worker - try again in a minute.";
   }
   await editReply(interaction, content);
 }
