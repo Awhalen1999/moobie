@@ -87,7 +87,7 @@ export function buildEntryEmbed(
       ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
       : rating,
     color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
-    footer: { text: `Watched ${friendlyDate(entry.watched_date) ?? "recently"}` },
+    footer: { text: `Logged ${friendlyDate(entry.watched_date) ?? "recently"}` },
   };
   if (entry.link) embed.url = entry.link;
   if (entry.poster_url) embed.image = { url: entry.poster_url };
@@ -110,13 +110,12 @@ export function buildFilmEmbed(
   const { displayNames = {} } = context;
   const name = (username: string) => displayNames[username] ?? username;
 
-  const watched = comparison.ratings.length;
   const summary = [
-    `${watched} watched`,
+    `${comparison.ratings.length} logged`,
     comparison.average !== null ? `avg ${comparison.average}` : "",
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join("\u2003");
 
   const embed: DiscordEmbed = {
     title: comparison.film_year

@@ -129,14 +129,14 @@ async function finishTrack(
     content =
       `🎬 Now tracking **${shown}** (` +
       `[letterboxd.com/${username}](https://letterboxd.com/${username}/)). ` +
-      `Stored ${inserted.length} recent ${inserted.length === 1 ? "entry" : "entries"} quietly - ` +
+      `Stored ${inserted.length} recent ${inserted.length === 1 ? "log" : "logs"} quietly - ` +
       `new logs will be announced automatically.`;
   } catch (err) {
     // Reply stays friendly; the real error goes to the logs for forensics.
     console.error(`moobie-app: /track failed for "${username}":`, err);
     content =
       `Couldn't read \`letterboxd.com/${username}/rss/\` - ` +
-      `check the spelling, and that the account's diary is public.`;
+      `check the spelling, and that their Letterboxd feed is public.`;
   }
   await editReply(interaction, content);
 }

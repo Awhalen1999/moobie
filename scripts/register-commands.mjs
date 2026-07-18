@@ -14,7 +14,7 @@ const STRING = 3; // Discord option type
 const commands = [
   {
     name: "track",
-    description: "Track a Letterboxd user's diary in this server",
+    description: "Add a Letterboxd user's feed to the pool",
     options: [
       {
         type: STRING,
@@ -44,7 +44,7 @@ const commands = [
   },
   {
     name: "film",
-    description: "How everyone rated a film",
+    description: "How the pool rated a film",
     options: [
       {
         type: STRING,
@@ -68,7 +68,7 @@ const commands = [
   },
   {
     name: "stats",
-    description: "Watching stats — the group's, or one person's",
+    description: "Logging stats — the pool's, or one person's",
     options: [
       {
         type: STRING,
@@ -80,7 +80,7 @@ const commands = [
   },
   {
     name: "refresh",
-    description: "Check Letterboxd for new logs right now",
+    description: "Check the pool's feeds for new logs right now",
   },
 ];
 

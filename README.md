@@ -23,7 +23,7 @@ moobie/
 ├── db/schema.sql        2 tables (tracked_users, log_entries)
 ├── packages/core/       @moobie/core — all shared logic:
 │                          db, letterboxd (RSS), analytics, discord embeds
-├── moobie-poll/         hourly cron Worker: poll diaries → insert new logs
+├── moobie-poll/         hourly cron Worker: poll feeds → announce new logs
 └── moobie-app/          Astro app on Cloudflare (bot interactions + web UI; stages 2–3)
 ```
 
