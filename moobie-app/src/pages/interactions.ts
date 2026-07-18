@@ -287,11 +287,11 @@ async function finishRefresh(interaction: Interaction): Promise<void> {
     const res = await fetch(`${env.MOOBIE_POLL_URL}/poll?key=${env.TRIGGER_KEY}`);
     if (!res.ok) throw new Error(`poll trigger ${res.status}`);
     const s = (await res.json()) as { users: number; inserted: number; announced: number };
-    const diaries = s.users === 1 ? "diary" : "diaries";
+    const feeds = s.users === 1 ? "feed" : "feeds";
     content =
       s.inserted === 0
-        ? `✅ Checked ${s.users} ${diaries} - nothing new.`
-        : `✅ Checked ${s.users} ${diaries} - ${s.inserted} new, ${s.announced} announced.`;
+        ? `✅ Checked ${s.users} ${feeds} - nothing new.`
+        : `✅ Checked ${s.users} ${feeds} - ${s.inserted} new, ${s.announced} announced.`;
   } catch (err) {
     console.error("moobie-app: /refresh failed:", err);
     content = "Couldn't reach the poll Worker - try again in a minute.";
