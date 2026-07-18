@@ -223,9 +223,10 @@ async function statsCommand(interaction: Interaction): Promise<Response> {
   });
 }
 
+// Em-spaces separate the stats — same visual rhythm as the rating rows on cards.
 function statsLine(s: UserStats): string {
-  const avg = s.average !== null ? `avg ${s.average}` : "nothing rated";
-  return `🎬 ${s.films} films (${s.entries} logs) · ⭐ ${avg} · ❤️ ${s.liked} · 🔁 ${s.rewatches}`;
+  const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
+  return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
 }
 
 /** /vs <user1> <user2> — head-to-head taste comparison. */
