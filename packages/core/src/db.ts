@@ -94,23 +94,51 @@ export function getEntriesByFilmKey(
     .then((r) => r.results);
 }
 
-/** Add (or re-activate) a tracked user. Idempotent on username. */
+export interface TrackedUserDetails {
+  discordId?: string | null;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+}
+
+/**
+ * Add (or re-activate) a tracked user. Idempotent on username; re-tracking with
+ * new details updates them (COALESCE keeps existing values when none given).
+ */
 export async function addTrackedUser(
   db: D1Database,
   username: string,
-  discordId: string | null = null,
-  avatarUrl: string | null = null,
+  details: TrackedUserDetails = {},
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tracked_users (username, discord_id, avatar_url, active, added_at)
-       VALUES (?, ?, ?, 1, ?)
+      `INSERT INTO tracked_users (username, discord_id, display_name, avatar_url, active, added_at)
+       VALUES (?, ?, ?, ?, 1, ?)
        ON CONFLICT(username) DO UPDATE SET
          active = 1,
+         discord_id = COALESCE(excluded.discord_id, discord_id),
+         display_name = COALESCE(excluded.display_name, display_name),
          avatar_url = COALESCE(excluded.avatar_url, avatar_url)`,
     )
-    .bind(username, discordId, avatarUrl, new Date().toISOString())
+    .bind(
+      username,
+      details.discordId ?? null,
+      details.displayName ?? null,
+      details.avatarUrl ?? null,
+      new Date().toISOString(),
+    )
     .run();
+}
+
+/** Soft-disable a tracked user. Returns false if the username isn't tracked. */
+export async function deactivateTrackedUser(
+  db: D1Database,
+  username: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare("UPDATE tracked_users SET active = 0 WHERE username = ? AND active = 1")
+    .bind(username)
+    .run();
+  return result.meta.changes > 0;
 }
 
 /** Store a user's Letterboxd avatar URL (fetched lazily by the poll). */

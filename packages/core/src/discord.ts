@@ -43,17 +43,25 @@ export function stars(rating: number | null): string {
   return `${glyphs.join(" ")} (${rating})`;
 }
 
+export interface EmbedContext {
+  /** The logger's Letterboxd pfp, shown beside their name. */
+  avatarUrl?: string | null;
+  /** username -> display_name for everyone tracked; falls back to username. */
+  displayNames?: Record<string, string>;
+}
+
 /**
  * Build the embed announcing one new diary entry. `comparison` is the result of
  * compareFilm() over every entry for this film (may be null if unavailable);
  * when present, other users' ratings and any disagreement are shown.
- * `avatarUrl` is the logger's Letterboxd pfp, shown beside their name.
  */
 export function buildEntryEmbed(
   entry: LogEntry,
   comparison: FilmComparison | null,
-  avatarUrl: string | null = null,
+  context: EmbedContext = {},
 ): DiscordEmbed {
+  const { avatarUrl = null, displayNames = {} } = context;
+  const name = (username: string) => displayNames[username] ?? username;
   const disagreement = comparison?.disagreement ?? false;
 
   // Em-spaces (U+2003) keep clear air between the rating, the heart, and the
@@ -68,7 +76,7 @@ export function buildEntryEmbed(
 
   const embed: DiscordEmbed = {
     author: {
-      name: `${entry.username} logged a film`,
+      name: `${name(entry.username)} logged a film`,
       url: `https://letterboxd.com/${entry.username}/`,
       ...(avatarUrl ? { icon_url: avatarUrl } : {}),
     },
@@ -84,7 +92,7 @@ export function buildEntryEmbed(
   if (entry.link) embed.url = entry.link;
   if (entry.poster_url) embed.image = { url: entry.poster_url };
 
-  const fields = comparisonFields(entry, comparison);
+  const fields = comparisonFields(entry, comparison, name);
   if (fields.length > 0) embed.fields = fields;
 
   return embed;
@@ -118,6 +126,7 @@ export async function sendChannelMessage(
 function comparisonFields(
   entry: LogEntry,
   comparison: FilmComparison | null,
+  name: (username: string) => string,
 ): EmbedField[] {
   if (!comparison) return [];
 
@@ -127,7 +136,7 @@ function comparisonFields(
   if (others.length > 0) {
     fields.push({
       name: "Others",
-      value: others.map((r) => `**${r.username}** — ${stars(r.rating)}`).join("\n"),
+      value: others.map((r) => `**${name(r.username)}** — ${stars(r.rating)}`).join("\n"),
     });
   }
 

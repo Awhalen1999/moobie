@@ -4,8 +4,9 @@
 
 -- People whose Letterboxd diaries we watch.
 CREATE TABLE IF NOT EXISTS tracked_users (
-  username        TEXT PRIMARY KEY,   -- Letterboxd username, lowercased
+  username        TEXT PRIMARY KEY,   -- Letterboxd username, lowercased — the identity everywhere
   discord_id      TEXT,               -- for @mentions; nullable
+  display_name    TEXT,               -- friendly name for cards, display-only; nullable
   avatar_url      TEXT,               -- Letterboxd pfp; fetched lazily, nullable
   active          INTEGER NOT NULL DEFAULT 1,  -- 1/0 soft-disable
   last_seen_guid  TEXT,               -- optional optimization; dedup is by guid regardless

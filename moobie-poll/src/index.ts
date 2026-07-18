@@ -26,6 +26,7 @@ import {
   insertEntries,
   sendChannelMessage,
   setUserAvatar,
+  type EmbedContext,
   type LogEntry,
   type ParsedEntry,
   type TrackedUser,
@@ -69,8 +70,13 @@ async function poll(env: Env): Promise<PollSummary> {
   const users = await getActiveUsers(env.DB);
   const summary: PollSummary = { users: users.length, inserted: 0, announced: 0, seeded: [] };
 
+  // username -> display name, for card rendering (author line + Others rows).
+  const displayNames = Object.fromEntries(
+    users.map((u) => [u.username, u.display_name ?? u.username]),
+  );
+
   for (const user of users) {
-    const result = await pollUser(env, user);
+    const result = await pollUser(env, user, displayNames);
     summary.inserted += result.inserted;
     summary.announced += result.announced;
     if (result.seeded) summary.seeded.push(user.username);
@@ -84,7 +90,11 @@ interface UserResult {
   seeded: boolean;
 }
 
-async function pollUser(env: Env, user: TrackedUser): Promise<UserResult> {
+async function pollUser(
+  env: Env,
+  user: TrackedUser,
+  displayNames: Record<string, string>,
+): Promise<UserResult> {
   const username = user.username;
 
   // If we hold nothing for this user yet, this is their first ingest: insert the
@@ -110,7 +120,7 @@ async function pollUser(env: Env, user: TrackedUser): Promise<UserResult> {
   const avatarUrl = await ensureAvatar(env.DB, user);
   let announced = 0;
   for (const entry of [...inserted].sort(byWatchedAscending)) {
-    announced += await announce(env, entry, avatarUrl);
+    announced += await announce(env, entry, { avatarUrl, displayNames });
   }
   return { inserted: inserted.length, announced, seeded: false };
 }
@@ -131,12 +141,12 @@ async function ensureAvatar(db: D1Database, user: TrackedUser): Promise<string |
 async function announce(
   env: Env,
   entry: LogEntry,
-  avatarUrl: string | null,
+  context: EmbedContext,
 ): Promise<number> {
   let embed;
   try {
     const filmEntries = await getEntriesByFilmKey(env.DB, entry.film_key);
-    embed = buildEntryEmbed(entry, compareFilm(filmEntries), avatarUrl);
+    embed = buildEntryEmbed(entry, compareFilm(filmEntries), context);
   } catch (err) {
     console.error(`moobie-poll: comparison failed for ${entry.guid}:`, err);
     return 0;

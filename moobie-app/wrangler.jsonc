@@ -11,6 +11,10 @@
 	"observability": {
 		"enabled": true
 	},
+	"vars": {
+		// Verifies Discord's Ed25519 signature on /interactions. Public, not a secret.
+		"DISCORD_PUBLIC_KEY": "0d642e6c8f80ddd76044a148b2051741a3b7a2c969148a3383c9070f121e0f3b"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

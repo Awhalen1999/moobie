@@ -72,8 +72,9 @@ No `films` table. Film fields are **denormalized** into `log_entries`.
 
 | column          | type    | notes                                    |
 |-----------------|---------|------------------------------------------|
-| username        | TEXT PK | Letterboxd username (lowercased)         |
+| username        | TEXT PK | Letterboxd username (lowercased) — the identity everywhere |
 | discord_id      | TEXT    | for @mentions; nullable                  |
+| display_name    | TEXT    | friendly name for cards; display-only, never a lookup key; nullable |
 | avatar_url      | TEXT    | Letterboxd pfp for embeds; fetched lazily; nullable |
 | active          | INTEGER | 1/0, soft-disable without deleting rows  |
 | last_seen_guid  | TEXT    | optional optimization; dedup is by guid regardless |
@@ -137,9 +138,17 @@ Real bot token from the start. No webhooks at any point.
 - **Silent seed:** a user's *first* ingest is stored but never announced, so
   adding someone doesn't flood the channel.
 - **Slash commands:** Astro `/interactions` route. Ed25519 verification on the
-  **raw body**, before any JSON parsing. Start with `/track <username>`,
-  `/untrack`, `/film <title>` (comparison), `/stats`.
-- Command registration script (guild-scoped) using `DISCORD_APP_ID` + `DISCORD_GUILD_ID`.
+  **raw body** (WebCrypto, no extra deps), before any JSON parsing.
+  - ✅ `/track <username> [display_name]` — validates the feed, grabs the avatar,
+    upserts (re-track updates details), seeds the backlog silently. Deferred
+    reply (network work > Discord's 3s window).
+  - ✅ `/untrack <username>` — soft-disable; history stays.
+  - Next: `/film <title>` (comparison card), `/stats`, `/refresh` (manual poll),
+    `/vs <user1> <user2>` (head-to-head).
+- ✅ Command registration script: `scripts/register-commands.mjs`, guild-scoped
+  (`DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs`).
+- Display names are card-rendering only (`display_name ?? username` at the edge);
+  commands always take Letterboxd usernames as input.
 
 ## Stage 3 — Frontend (super simple)
 
