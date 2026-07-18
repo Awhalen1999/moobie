@@ -142,8 +142,11 @@ Real bot token from the start. No webhooks at any point.
     upserts (re-track updates details), seeds the backlog silently. Deferred
     reply (network work > Discord's 3s window).
   - ✅ `/untrack <username>` — soft-disable; history stays.
-  - Next: `/film <title>` (comparison card), `/stats`, `/refresh` (manual poll),
-    `/vs <user1> <user2>` (head-to-head).
+  - ✅ `/film <title>` — comparison card (most-logged title match wins).
+  - ✅ `/stats [username]` — per-user or group aggregates.
+  - ✅ `/vs <user1> <user2>` — head-to-head: shared films, agreement %, biggest gap.
+  - ✅ `/refresh` — deferred; triggers the poll Worker's `/poll` via
+    `MOOBIE_POLL_URL` (var) + `TRIGGER_KEY` (app secret).
 - ✅ Command registration script: `scripts/register-commands.mjs`, guild-scoped
   (`DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs`).
 - Display names are card-rendering only (`display_name ?? username` at the edge);
