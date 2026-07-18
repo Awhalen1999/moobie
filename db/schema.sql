@@ -33,5 +33,5 @@ CREATE TABLE IF NOT EXISTS log_entries (
 -- Look up all ratings of one film across users (analytics / compareFilm).
 CREATE INDEX IF NOT EXISTS idx_log_entries_film_key ON log_entries(film_key);
 
--- Look up one user's entries, newest first (diary views).
+-- Look up one user's logs, newest first (user pages).
 CREATE INDEX IF NOT EXISTS idx_log_entries_username ON log_entries(username, watched_date DESC);

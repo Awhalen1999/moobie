@@ -2,9 +2,9 @@
 // slash command here; we verify the Ed25519 signature on the RAW body before
 // any JSON parsing (invariant #7), then route on the command name.
 //
-// /track runs network fetches (RSS + avatar), so it uses Discord's deferred
-// reply: respond "thinking…" within the 3-second window, finish the work via
-// waitUntil, then edit the reply. /untrack is one UPDATE and answers directly.
+// /track and /refresh do network work, so they use Discord's deferred reply:
+// respond "thinking…" within the 3-second window, finish via waitUntil, then
+// edit the reply. Everything else answers directly.
 
 import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
@@ -12,8 +12,10 @@ import {
   addTrackedUser,
   buildEntryEmbed,
   buildFilmEmbed,
+  buildStatsEmbed,
   compareFilm,
   deactivateTrackedUser,
+  displayNameMap,
   findFilm,
   getAllTrackedUsers,
   getAvatarUrl,
@@ -24,7 +26,6 @@ import {
   getUserStats,
   insertEntries,
   type DiscordEmbed,
-  type UserStats,
 } from "@moobie/core";
 
 export const prerender = false;
@@ -87,7 +88,7 @@ export const POST: APIRoute = async ({ request }) => {
       case "review-key":
         return reviewKey(interaction);
       case "stats":
-        return statsCommand(interaction);
+        return stats(interaction);
       case "refresh":
         return refresh(interaction);
     }
@@ -108,10 +109,7 @@ function track(interaction: Interaction): Response {
   const displayName = option(interaction, "display_name")?.trim() || null;
 
   if (!username || !/^[a-z0-9_]+$/.test(username)) {
-    return json({
-      type: MESSAGE,
-      data: { content: `\`${username ?? ""}\` doesn't look like a Letterboxd username.` },
-    });
+    return msg(`\`${username ?? ""}\` doesn't look like a Letterboxd username.`);
   }
 
   waitUntil(finishTrack(interaction, username, displayName));
@@ -150,14 +148,11 @@ async function finishTrack(
 async function untrack(interaction: Interaction): Promise<Response> {
   const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
   const removed = await deactivateTrackedUser(env.DB, username);
-  return json({
-    type: MESSAGE,
-    data: {
-      content: removed
-        ? `👋 Stopped tracking **${username}**.`
-        : `**${username}** isn't currently tracked.`,
-    },
-  });
+  return msg(
+    removed
+      ? `👋 Stopped tracking **${username}**.`
+      : `**${username}** isn't currently tracked.`,
+  );
 }
 
 /**
@@ -169,12 +164,7 @@ async function film(interaction: Interaction): Promise<Response> {
   if (!query) return msg("Give me a film title to look up.");
 
   const match = findFilm(await getFilmCatalog(env.DB), query);
-  if (!match) {
-    return msg(
-      `Nobody's logged anything matching “${query}” yet. ` +
-        `If it should be there, try \`/film-key\` with the slug from the film's Letterboxd URL.`,
-    );
-  }
+  if (!match) return msg(noMatch(query, "/film-key"));
   return filmCard(match.film_key);
 }
 
@@ -182,15 +172,12 @@ async function film(interaction: Interaction): Promise<Response> {
 async function filmKey(interaction: Interaction): Promise<Response> {
   const key = option(interaction, "key")?.trim().toLowerCase().replace(/\//g, "");
   if (!key) return msg("Give me a film key to look up.");
-  return filmCard(
-    key,
-    `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`,
-  );
+  return filmCard(key, keyNotFound(key));
 }
 
 /** The shared /film + /film-key reply: comparison card for one film_key. */
-async function filmCard(filmKeyValue: string, notFound?: string): Promise<Response> {
-  const comparison = compareFilm(await getEntriesByFilmKey(env.DB, filmKeyValue));
+async function filmCard(key: string, notFound?: string): Promise<Response> {
+  const comparison = compareFilm(await getEntriesByFilmKey(env.DB, key));
   if (!comparison) {
     return msg(notFound ?? "Nobody's logged that yet.");
   }
@@ -207,12 +194,7 @@ async function review(interaction: Interaction): Promise<Response> {
   if (!query) return msg("Give me a film title to look up.");
 
   const match = findFilm(await getFilmCatalog(env.DB), query);
-  if (!match) {
-    return msg(
-      `Nobody's logged anything matching “${query}” yet. ` +
-        `If it should be there, try \`/review-key\` with the film's Letterboxd URL slug.`,
-    );
-  }
+  if (!match) return msg(noMatch(query, "/review-key"));
   return reviewCard(username, match.film_key);
 }
 
@@ -221,26 +203,21 @@ async function reviewKey(interaction: Interaction): Promise<Response> {
   const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
   const key = option(interaction, "key")?.trim().toLowerCase().replace(/\//g, "");
   if (!key) return msg("Give me a film key to look up.");
-  return reviewCard(
-    username,
-    key,
-    `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`,
-  );
+  return reviewCard(username, key, keyNotFound(key));
 }
 
 /** The shared /review + /review-key reply: one user's latest log of one film. */
 async function reviewCard(
   username: string,
-  filmKeyValue: string,
+  key: string,
   notFound?: string,
 ): Promise<Response> {
-  const entries = await getEntriesByFilmKey(env.DB, filmKeyValue);
+  const entries = await getEntriesByFilmKey(env.DB, key);
   const comparison = compareFilm(entries);
   if (!comparison) return msg(notFound ?? "Nobody's logged that yet.");
 
-  const latest = entries
-    .filter((e) => e.username === username)
-    .sort((a, b) => ((a.watched_date ?? "") < (b.watched_date ?? "") ? 1 : -1))[0];
+  // Rows arrive newest-first (the query orders them), so the first hit wins.
+  const latest = entries.find((e) => e.username === username);
   if (!latest) {
     const film = comparison.film_year
       ? `${comparison.film_title} (${comparison.film_year})`
@@ -249,44 +226,41 @@ async function reviewCard(
   }
 
   const users = await getAllTrackedUsers(env.DB);
-  const displayNames = Object.fromEntries(
-    users.map((u) => [u.username, u.display_name ?? u.username]),
+  return embeds(
+    buildEntryEmbed(latest, comparison, {
+      avatarUrl: users.find((u) => u.username === username)?.avatar_url ?? null,
+      displayNames: displayNameMap(users),
+    }),
   );
-  const avatarUrl = users.find((u) => u.username === username)?.avatar_url ?? null;
+}
 
-  return embeds(buildEntryEmbed(latest, comparison, { avatarUrl, displayNames }));
+/** Shared miss copy for the title-search commands (/film, /review). */
+function noMatch(query: string, keyCommand: string): string {
+  return (
+    `Nobody's logged anything matching “${query}” yet. ` +
+    `If it should be there, try \`${keyCommand}\` with the slug from the film's Letterboxd URL.`
+  );
+}
+
+/** Shared miss copy for the exact-key commands (/film-key, /review-key). */
+function keyNotFound(key: string): string {
+  return `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`;
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */
-async function statsCommand(interaction: Interaction): Promise<Response> {
+async function stats(interaction: Interaction): Promise<Response> {
   const username = option(interaction, "username")?.trim().toLowerCase();
   const names = await displayNames();
 
   if (username) {
     const userStats = await getUserStats(env.DB, username);
-    if (!userStats) return msg(`No entries for **${username}** yet.`);
-    return embeds({
-      title: `${names[username] ?? username} - stats`,
-      description: statsLine(userStats),
-      color: MOOBIE_GREEN,
-    });
+    if (!userStats) return msg(`No logs for **${username}** yet.`);
+    return embeds(buildStatsEmbed([userStats], { displayNames: names }));
   }
 
   const group = await getGroupStats(env.DB);
   if (group.length === 0) return msg("Nothing logged yet - `/track` someone first.");
-  return embeds({
-    title: "moobie stats",
-    description: group
-      .map((s) => `**${names[s.username] ?? s.username}**\n${statsLine(s)}`)
-      .join("\n\n"),
-    color: MOOBIE_GREEN,
-  });
-}
-
-// Em-spaces separate the stats — same visual rhythm as the rating rows on cards.
-function statsLine(s: UserStats): string {
-  const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
-  return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
+  return embeds(buildStatsEmbed(group, { displayNames: names }));
 }
 
 /** /refresh — run a poll right now instead of waiting for the top of the hour. */
@@ -315,12 +289,9 @@ async function finishRefresh(interaction: Interaction): Promise<void> {
 
 // --- plumbing ---------------------------------------------------------------
 
-const MOOBIE_GREEN = 0x00e054;
-
 /** username -> display name for everyone ever tracked (fallback: username). */
 async function displayNames(): Promise<Record<string, string>> {
-  const users = await getAllTrackedUsers(env.DB);
-  return Object.fromEntries(users.map((u) => [u.username, u.display_name ?? u.username]));
+  return displayNameMap(await getAllTrackedUsers(env.DB));
 }
 
 function msg(content: string): Response {

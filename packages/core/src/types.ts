@@ -30,8 +30,18 @@ export interface LogEntry extends ParsedEntry {
 export interface FilmCatalogEntry {
   film_key: string;
   film_title: string;
-  entries: number; // how many logs the group has for it
+  logs: number; // how many logs the group has for it
   last_logged: string; // MAX(created_at) — recency tie-break for search
+}
+
+/** Aggregate stats for one user (a SELECT row — see getUserStats / getGroupStats). */
+export interface UserStats {
+  username: string;
+  logs: number;
+  films: number; // distinct films
+  average: number | null; // ROUND(AVG(rating), 2); null if nothing rated
+  liked: number;
+  rewatches: number;
 }
 
 /** A row from the tracked_users table. */

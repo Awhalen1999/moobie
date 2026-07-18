@@ -1,10 +1,11 @@
 # moobie-app
 
-The Astro-on-Cloudflare deploy for moobie: Discord `/interactions` (stage 2) and
-the simple web frontend + `/api/*` routes (stage 3). Not started yet — this is
-the untouched Astro scaffold with the Cloudflare adapter.
+The Astro-on-Cloudflare deploy for moobie. It hosts the live Discord
+`/interactions` endpoint (stage 2 — all slash commands land here) and will host
+the simple web frontend + `/api/*` routes (stage 3, not started; the index page
+is still a placeholder).
 
-See the repo root [`HANDOFF.md`](../HANDOFF.md) for the plan and invariants.
+See the repo root [`PLAN.md`](../PLAN.md) for the plan and invariants.
 Key ones for this package:
 
 - All shared logic comes from `@moobie/core` — no queries or analytics in here.

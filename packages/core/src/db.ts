@@ -1,15 +1,18 @@
-// D1 query helpers — the single source of DB access, imported by both the poll
-// Worker and the Astro app (invariant #7: no duplication).
-//
-// Every function takes the D1 binding as its first argument. The db module never
-// reaches into global env, so it stays pure and portable: the Worker passes
-// `env.DB` from its scheduled() handler, an endpoint passes `env.DB` from the
-// `cloudflare:workers` import. Same functions, either caller.
+// D1 query helpers — the single DB module, imported by both deploys
+// (invariant #8: one copy of every query). Every function takes the D1 binding
+// as its first argument rather than reaching into global env, so the same
+// functions serve the poll Worker and the Astro endpoints alike.
 //
 // Invariant #1: every write is INSERT OR IGNORE on a UNIQUE key, so re-ingesting
 // the same entry is a no-op and every writer is idempotent.
 
-import type { FilmCatalogEntry, LogEntry, ParsedEntry, TrackedUser } from "./types.ts";
+import type {
+  FilmCatalogEntry,
+  LogEntry,
+  ParsedEntry,
+  TrackedUser,
+  UserStats,
+} from "./types.ts";
 
 /** All users whose diaries we actively poll. */
 export function getActiveUsers(db: D1Database): Promise<TrackedUser[]> {
@@ -40,13 +43,10 @@ export async function countEntriesForUser(
 }
 
 /**
- * Insert parsed entries, skipping any whose guid we already have.
- * Returns only the rows that were actually inserted (the new ones), so callers
- * know exactly what to announce to Discord.
- *
- * Entries are inserted one at a time and kept when meta.changes === 1. At a
- * friend-group's volume (~50 rows per poll) this is plenty fast and stays
- * obvious — no batch-result bookkeeping to get wrong.
+ * Insert parsed entries, skipping guids we already have. Returns only the rows
+ * actually inserted (meta.changes === 1) — exactly what to announce. One
+ * statement per row: plenty fast at friend-group volume, and no batch-result
+ * bookkeeping to get wrong.
  */
 export async function insertEntries(
   db: D1Database,
@@ -102,20 +102,6 @@ export function getEntriesByFilmKey(
     .then((r) => r.results);
 }
 
-/** One user's whole history, newest watch first. */
-export function getEntriesForUser(
-  db: D1Database,
-  username: string,
-): Promise<LogEntry[]> {
-  return db
-    .prepare(
-      "SELECT * FROM log_entries WHERE username = ? ORDER BY watched_date DESC",
-    )
-    .bind(username)
-    .all<LogEntry>()
-    .then((r) => r.results);
-}
-
 /**
  * The group's whole film catalog: one row per film with log count and recency.
  * Small by construction (only films the group has logged), so title matching
@@ -124,30 +110,21 @@ export function getEntriesForUser(
 export function getFilmCatalog(db: D1Database): Promise<FilmCatalogEntry[]> {
   return db
     .prepare(
-      `SELECT film_key, film_title, COUNT(*) AS entries, MAX(created_at) AS last_logged
+      `SELECT film_key, film_title, COUNT(*) AS logs, MAX(created_at) AS last_logged
        FROM log_entries GROUP BY film_key`,
     )
     .all<FilmCatalogEntry>()
     .then((r) => r.results);
 }
 
-export interface UserStats {
-  username: string;
-  entries: number;
-  films: number; // distinct films
-  average: number | null; // null if nothing rated
-  liked: number;
-  rewatches: number;
-}
-
 const STATS_COLUMNS = `
-  COUNT(*)                  AS entries,
+  COUNT(*)                  AS logs,
   COUNT(DISTINCT film_key)  AS films,
   ROUND(AVG(rating), 2)     AS average,
   SUM(liked)                AS liked,
   SUM(rewatch)              AS rewatches`;
 
-/** Aggregate stats for one user; null if they have no entries at all. */
+/** Aggregate stats for one user; null if they have no logs at all. */
 export async function getUserStats(
   db: D1Database,
   username: string,
@@ -156,15 +133,15 @@ export async function getUserStats(
     .prepare(`SELECT username, ${STATS_COLUMNS} FROM log_entries WHERE username = ?`)
     .bind(username)
     .first<UserStats>();
-  return row && row.entries > 0 ? row : null;
+  return row && row.logs > 0 ? row : null;
 }
 
-/** Aggregate stats for everyone with entries, most logs first. */
+/** Aggregate stats for everyone with logs, most logs first. */
 export function getGroupStats(db: D1Database): Promise<UserStats[]> {
   return db
     .prepare(
       `SELECT username, ${STATS_COLUMNS} FROM log_entries
-       GROUP BY username ORDER BY entries DESC`,
+       GROUP BY username ORDER BY logs DESC`,
     )
     .all<UserStats>()
     .then((r) => r.results);

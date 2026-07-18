@@ -1,6 +1,6 @@
-# moobie — Build Spec (v1)
+# moobie — Plan
 
-> Handoff doc. Everything is called **moobie**.
+> The living plan + reference doc. Everything is called **moobie**.
 > Repo: `moobie`. Bot + site: moobie, live at `moobie.awln.dev`.
 
 ---
@@ -9,24 +9,23 @@
 
 A Discord bot + web dashboard for a friend group that logs films on Letterboxd.
 When someone logs a film, moobie posts it to Discord with their rating and a
-comparison against anyone else who's rated the same film (flagging disagreements).
-The website shows simple stats on top of the same data.
+comparison against anyone else who's rated the same film (flagging
+disagreements). The website shows simple stats on top of the same data.
 
 Data comes from each tracked user's **public Letterboxd diary RSS feed**
 (`letterboxd.com/{username}/rss/`). There is no official-API integration in v1
 and no live Discord gateway connection — the bot is HTTP/cron only.
 
-## The plan — three stages, in order
+## Where we are
 
-1. **✅ Core backend** — schema, shared query module, RSS fetch, hourly poll
-   loop (ingest-only), analytics. Done and deployed. This is the foundation
-   everything else reads from; it stays simple and linear.
-2. **Discord bot** — a real bot (bot token) from day one. Announces new logs
-   with the rating comparison, plus slash commands via `/interactions`.
-   **No channel webhooks — that was never the plan.**
-3. **Frontend** — super simple. A few Astro pages over `/api/*`: recent
-   activity, per-film comparisons, basic per-user stats. Fancy visualizations
-   (node graph etc.) are post-MVP.
+1. **✅ Core backend** — schema, shared `@moobie/core` package, RSS ingest,
+   hourly poll. Deployed and ingesting.
+2. **✅ Discord bot** — hourly announcement cards, plus the full slash-command
+   set via the Ed25519-verified `/interactions` route: `/track`, `/untrack`,
+   `/film`, `/film-key`, `/review`, `/review-key`, `/stats`, `/refresh`.
+   (`/vs` was cut — a better head-to-head is post-MVP; the old implementation
+   lives in git history.)
+3. **⬜ Frontend** — the work in front of us. See "Stage 3 plan" below.
 
 ---
 
@@ -37,15 +36,22 @@ Two deploys, one D1 database.
 | Component     | Role                                                        | Hosting            |
 |---------------|------------------------------------------------------------|--------------------|
 | **moobie app**  | Frontend + all HTTP (API routes, Discord `/interactions`) | Astro on Cloudflare |
-| **moobie-poll** | Hourly cron poll only (~20 lines of glue)                 | Cloudflare Worker   |
+| **moobie-poll** | Hourly cron poll: ingest feeds, announce new logs         | Cloudflare Worker   |
 | **D1**          | SQLite, bound to both                                     | Cloudflare          |
 
 The separate Worker exists **only** because the Astro app can't run a cron
-trigger. All non-cron logic lives in the Astro app. Both deploys import the
-same shared `@moobie/core` package (DB queries, RSS fetch, analytics, embed
-builders) so there is no duplicated logic.
+trigger. Both deploys import the same shared `@moobie/core` package so there is
+no duplicated logic:
 
----
+- `db` — the single DB query module; every function takes the D1 binding as its
+  first argument.
+- `letterboxd` — RSS fetch + parse behind one boundary.
+- `analytics` — pure comparison functions.
+- `discord` — pure embed builders (every card moobie posts). Delivery — the
+  actual channel POST as the bot — lives in the poll Worker, its only caller.
+
+Core ships raw TypeScript; each deploy's bundler transpiles it — no build step,
+no drift.
 
 ## Tech stack
 
@@ -54,13 +60,13 @@ builders) so there is no duplicated logic.
 - **Cloudflare D1** — binding name `DB`
 - **`@astrojs/cloudflare` adapter** — targets Workers
 - **Config lives in `wrangler.jsonc`**
-- **D1 access:** `import { env } from "cloudflare:workers"` inside server endpoints; `prerender = false` on D1-touching endpoints
+- **D1 access:** `import { env } from "cloudflare:workers"` inside server endpoints
 - **Poll Worker cron:** `0 * * * *` (every 60 min)
 - **Discord out:** bot token, plain REST `POST /channels/{id}/messages` — no webhooks
 - **Discord in:** Astro `/interactions` route, Ed25519-verified
 - **Secrets:** via `wrangler secret put` (never in the repo)
 - **Local dev:** must run under `wrangler dev`
-- **Deploy:** Astro app + `wrangler deploy` for the poll Worker
+- **Deploy:** `pnpm deploy` in each of `moobie-app/` and `moobie-poll/`
 
 ---
 
@@ -104,64 +110,41 @@ is idempotent.
 
 ---
 
-## Stage 1 — Core backend ✅ (as built)
+## As built (stages 1–2)
 
-Poll → parse → store. Nothing else. Deployed and ingesting hourly.
+The poll: `scheduled()` → active users → fetch each feed → `INSERT OR IGNORE`
+→ announce each genuinely new row (oldest watch first) to every channel in
+`DISCORD_ANNOUNCE_CHANNEL_IDS` — one pool of data, N places it speaks. A user's
+*first* ingest is stored silently, so `/track`-ing someone never floods the
+channel. One user's failed feed never stops the rest. A `TRIGGER_KEY`-guarded
+`GET /poll` runs the same poll on demand (`/refresh` uses it).
 
-- `db/schema.sql` — the 2 tables above, plus film_key / username indexes.
-- `@moobie/core/db` — the single DB module (invariant #7); every function takes
-  the `D1Database` binding as its first arg, all writes `INSERT OR IGNORE`.
-- `@moobie/core/letterboxd` — `getRecentEntries(username)`, RSS behind one
-  function (invariant #3). `fast-xml-parser`, watches filtered by
-  `<letterboxd:watchedDate>`, `film_key` = the film's global Letterboxd slug.
-- `@moobie/core/analytics` — `compareFilm()` + growth room; pure functions
-  (invariant #4).
-- `@moobie/core/discord` — **pure embed builders only** (`buildEntryEmbed`,
-  `stars`). No delivery code in core; the bot owns sending.
-- `moobie-poll` — `scheduled()` → active users → fetch → insert; one user's
-  failed feed never stops the rest. Also a `TRIGGER_KEY`-guarded `GET /poll`
-  for on-demand runs.
+The commands: all inbound traffic hits the Astro `/interactions` route, which
+verifies Discord's Ed25519 signature on the **raw body** (WebCrypto, no extra
+deps) before any JSON parsing. `/track` and `/refresh` defer (network work >
+Discord's 3s window); everything else answers directly. Display names are
+card-rendering only (`display_name ?? username` at the edge); commands always
+take Letterboxd usernames as input.
 
-Because stage 1 ingests silently, the whole backlog is already in the DB before
-the bot exists — no announcement flood when stage 2 ships.
+The cards: built by pure functions in `@moobie/core/discord` — `buildEntryEmbed`
+(announcements and `/review`), `buildFilmEmbed` (`/film`), `buildStatsEmbed`
+(`/stats`). Letterboxd green, orange when the disagreement threshold trips.
 
-## Stage 2 — Discord bot
+Command registration: `scripts/register-commands.mjs`, guild-scoped so updates
+appear instantly (`DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs`).
+Re-run it whenever a command definition changes — PUT replaces the whole set.
 
-Real bot token from the start. No webhooks at any point.
-
-- Create the Discord app + bot; invite to the guild.
-- **Announce:** poll Worker posts each genuinely new row (oldest watch first)
-  via `POST /channels/{id}/messages` with the bot token, using
-  `buildEntryEmbed(entry, compareFilm(...))` from core — to every channel in
-  `DISCORD_ANNOUNCE_CHANNEL_IDS`.
-- **Silent seed:** a user's *first* ingest is stored but never announced, so
-  adding someone doesn't flood the channel.
-- **Slash commands:** Astro `/interactions` route. Ed25519 verification on the
-  **raw body** (WebCrypto, no extra deps), before any JSON parsing.
-  - ✅ `/track <username> [display_name]` — validates the feed, grabs the avatar,
-    upserts (re-track updates details), seeds the backlog silently. Deferred
-    reply (network work > Discord's 3s window).
-  - ✅ `/untrack <username>` — soft-disable; history stays.
-  - ✅ `/film <title>` — comparison card (most-logged title match wins).
-  - ✅ `/stats [username]` — per-user or group aggregates.
-  - ✅ `/vs <user1> <user2>` — head-to-head: shared films, agreement %, biggest gap.
-  - ✅ `/refresh` — deferred; triggers the poll Worker's `/poll` via
-    `MOOBIE_POLL_URL` (var) + `TRIGGER_KEY` (app secret).
-- ✅ Command registration script: `scripts/register-commands.mjs`, guild-scoped
-  (`DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs`).
-- Display names are card-rendering only (`display_name ?? username` at the edge);
-  commands always take Letterboxd usernames as input.
-
-## Stage 3 — Frontend (super simple)
+## Stage 3 plan — frontend (super simple)
 
 - Astro + Tailwind pages over `/api/*` server endpoints (`prerender = false`).
 - v1 pages: recent activity feed, film page (everyone's ratings + disagreement),
-  per-user page. That's it.
+  per-user page. That's it — fancy visualizations are post-MVP.
 - Point `moobie.awln.dev` at the app; e2e verify.
 
 ## Post-MVP
 
 - Bulk CSV history import (full back-history).
+- Head-to-head v2 (replaces the cut `/vs`).
 - Richer analytics: who-watches-with-whom node graph, taste-similarity scores.
 
 ---
@@ -186,7 +169,11 @@ surface; schema names keep their semantics: `watched_date`, `log_entries`.)
 | **card** | any embed moobie posts |
 | **Biggest gap** | the disagreement field: the two extreme raters, shown when spread ≥ 1.5 |
 
+Bot-facing text uses plain hyphens, never em-dashes.
+
 ## Invariants (do not violate)
+
+Code comments cite these by number — the numbering is stable.
 
 1. **2 tables, multiple writers** — every write is `INSERT OR IGNORE` on `guid`.
 2. **Film data is denormalized** into `log_entries` — no films table.
@@ -232,26 +219,32 @@ One data pool; servers are just places moobie speaks. To move (or add) a server:
 4. Optionally kick the bot from the old server. Nothing else changes: DB, token,
    public key, app ID, and the Astro app deploy are all server-agnostic.
 
-## Secrets checklist
+## Secrets & config
 
-| secret                 | used by        | stage |
-|------------------------|----------------|-------|
-| `TRIGGER_KEY`          | poll Worker    | 1     |
-| `DISCORD_BOT_TOKEN`    | poll Worker + app | 2  |
-| `DISCORD_PUBLIC_KEY`   | app (`/interactions` verify) | 2 |
-| `DISCORD_APP_ID`       | app + scripts  | 2     |
-| `DISCORD_GUILD_ID`     | app + scripts  | 2     |
-Announce targets are **not** a secret: `DISCORD_ANNOUNCE_CHANNEL_IDS` (comma-separated
-channel ids — one data pool broadcast to N channels, can span servers) lives in
-`moobie-poll/wrangler.jsonc` vars. Moving/adding a server is a config edit.
+Secrets (set with `wrangler secret put`, never committed):
+
+| secret              | where       | why                                        |
+|---------------------|-------------|--------------------------------------------|
+| `DISCORD_BOT_TOKEN` | poll Worker | posts announcements as the bot             |
+| `TRIGGER_KEY`       | poll Worker + app | guards `GET /poll`; `/refresh` calls it with the same key |
+
+Plain vars (in `wrangler.jsonc`, not secret):
+
+- `DISCORD_PUBLIC_KEY` (app) — verifies the Ed25519 signature on `/interactions`.
+- `MOOBIE_POLL_URL` (app) — the poll Worker, for `/refresh`.
+- `DISCORD_ANNOUNCE_CHANNEL_IDS` (poll Worker) — comma-separated channel ids;
+  one data pool broadcast to N channels, can span servers.
+
+Script-side (`scripts/register-commands.mjs`): the app ID is hardcoded (a public
+identifier, never changes); `DISCORD_GUILD_ID` defaults to moobie's home server
+with an env override — see the runbook above.
 
 ---
 
-## Implementation notes (as built)
+## Implementation notes
 
-- The shared `lib/` is a workspace package, `@moobie/core`, imported by both
-  deploys — the cleanest way to satisfy invariant #8. It ships raw TypeScript;
-  each deploy's bundler transpiles it — no build step, no drift.
+- `@moobie/core` is a pnpm workspace package shipping raw TypeScript; each
+  deploy's bundler transpiles it — no build step, no drift.
 - `film_key` is the film's **global Letterboxd slug** (from the entry link,
   e.g. `toy-story-4`), which every user shares for the same film — more reliable
   than title+year.

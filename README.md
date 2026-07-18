@@ -6,13 +6,14 @@ comparison against anyone else who has rated the same film (flagging
 disagreements). Data comes from each tracked user's public Letterboxd diary RSS
 feed — no official API, no live Discord gateway.
 
-See [`HANDOFF.md`](./HANDOFF.md) for the full spec. The build is three stages,
-in order:
+See [`PLAN.md`](./PLAN.md) for the full plan and reference. The build is three
+stages, in order:
 
 1. **✅ Core backend** — schema, shared core package, RSS ingest, hourly poll.
-2. **Discord bot** — real bot token (never webhooks). Announcements and
-   `/track` + `/untrack` are live; `/film`, `/stats`, `/refresh`, `/vs` next.
-3. **Frontend** — a few simple Astro pages over the same data.
+2. **✅ Discord bot** — real bot token (never webhooks). Announcements plus
+   `/track`, `/untrack`, `/film`, `/film-key`, `/review`, `/review-key`,
+   `/stats`, and `/refresh`.
+3. **Frontend** — a few simple Astro pages over the same data. Up next.
 
 ## Layout
 
@@ -95,8 +96,8 @@ The D1 binding (`DB`) and database id are configured in both
 
 ## Status
 
-Stage 1 (core backend) is complete. Stage 2 (Discord bot) is live: hourly
-announcements with comparison cards, plus `/track` and `/untrack` via the
-Ed25519-verified `/interactions` endpoint. Remaining stage-2 commands:
-`/film`, `/stats`, `/refresh`, `/vs`. Then the simple web frontend (stage 3).
-CSV history import is post-MVP. See HANDOFF.md for the "Moving servers" runbook.
+Stages 1 and 2 are live: hourly announcements with comparison cards, and the
+full command set (`/track`, `/untrack`, `/film`, `/film-key`, `/review`,
+`/review-key`, `/stats`, `/refresh`) via the Ed25519-verified `/interactions`
+endpoint. Next up is the simple web frontend (stage 3). CSV history import is
+post-MVP. See PLAN.md for the stage-3 plan and the "Moving servers" runbook.

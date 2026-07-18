@@ -1,10 +1,10 @@
-// Discord out — pure embed builders (easy to eyeball and test) plus one thin
-// delivery function that posts as the bot (invariant #6: bot token, never
-// channel webhooks). The poll Worker announces new rows; the /interactions
-// route replies with the same embed shapes.
+// Discord cards — pure embed builders only, no delivery and no I/O, so every
+// card moobie posts is defined in this one file. The poll Worker's announcements
+// and the /interactions replies share these shapes; sending lives with the poll
+// Worker (invariant #6: bot token, never channel webhooks).
 
 import type { FilmComparison, UserRating } from "./analytics.ts";
-import type { LogEntry } from "./types.ts";
+import type { LogEntry, TrackedUser, UserStats } from "./types.ts";
 
 // Letterboxd's palette: green normally, orange when raters disagree.
 const COLOR_DEFAULT = 0x00e054;
@@ -48,6 +48,11 @@ export interface EmbedContext {
   avatarUrl?: string | null;
   /** username -> display_name for everyone tracked; falls back to username. */
   displayNames?: Record<string, string>;
+}
+
+/** username -> display name for card rendering; falls back to the username. */
+export function displayNameMap(users: TrackedUser[]): Record<string, string> {
+  return Object.fromEntries(users.map((u) => [u.username, u.display_name ?? u.username]));
 }
 
 /**
@@ -112,7 +117,7 @@ export function buildFilmEmbed(
 
   const summary = [
     `${comparison.ratings.length} logged`,
-    comparison.average !== null ? `avg ${comparison.average}` : "",
+    comparison.average !== null ? `\u2b50 avg ${comparison.average}` : "",
   ]
     .filter(Boolean)
     .join("\u2003");
@@ -133,26 +138,25 @@ export function buildFilmEmbed(
   return embed;
 }
 
-const API_BASE = "https://discord.com/api/v10";
+/**
+ * Card for /stats — one line of numbers per user. Exactly one user gets their
+ * name in the title; a group card is titled for the whole pool.
+ */
+export function buildStatsEmbed(
+  stats: UserStats[],
+  context: EmbedContext = {},
+): DiscordEmbed {
+  const { displayNames = {} } = context;
+  const name = (username: string) => displayNames[username] ?? username;
 
-/** POST one embed to a channel as the bot. Throws on a non-OK response. */
-export async function sendChannelMessage(
-  botToken: string,
-  channelId: string,
-  embed: DiscordEmbed,
-): Promise<void> {
-  const res = await fetch(`${API_BASE}/channels/${channelId}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ embeds: [embed] }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Discord ${res.status} posting to channel ${channelId}: ${body}`);
-  }
+  const single = stats.length === 1 ? stats[0]! : null;
+  return {
+    title: single ? `${name(single.username)} - stats` : "moobie stats",
+    description: single
+      ? statsLine(single)
+      : stats.map((s) => `**${name(s.username)}**\n${statsLine(s)}`).join("\n\n"),
+    color: COLOR_DEFAULT,
+  };
 }
 
 // --- helpers -------------------------------------------------------------
@@ -182,6 +186,12 @@ function comparisonFields(
 /** One rater's line on a card: name, stars, and their heart if they liked it. */
 function ratingLine(r: UserRating, name: (username: string) => string): string {
   return `**${name(r.username)}** - ${stars(r.rating)}${r.liked ? " ❤️" : ""}`;
+}
+
+// Em-spaces separate the stats — same visual rhythm as the rating rows on cards.
+function statsLine(s: UserStats): string {
+  const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
+  return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
 }
 
 /**

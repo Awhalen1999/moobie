@@ -1,31 +1,27 @@
-// moobie-poll — the hourly cron Worker. Its whole job: for each active user,
-// fetch their Letterboxd diary, insert anything new, and announce the new rows
-// to Discord as the bot. All real logic lives in @moobie/core; this file is just
-// the glue that wires the shared functions to the cron trigger and the D1 binding.
+// moobie-poll — the hourly cron Worker: for each active user, fetch their
+// Letterboxd feed, insert anything new, and announce the genuinely-new rows to
+// Discord as the bot. All real logic lives in @moobie/core; this file is the
+// glue, plus delivery (core's embed builders stay pure of I/O).
 //
-// Idempotent and stateless (invariant #5): re-fetching the same ~50 entries is a
-// no-op because every insert is INSERT OR IGNORE on guid, so a missed tick
-// simply self-heals on the next run. No retry logic.
+// Idempotent and stateless (invariant #5): every insert is INSERT OR IGNORE on
+// guid, so re-fetching is a no-op and a missed tick self-heals next run.
 //
-// Announcements broadcast to every channel in DISCORD_ANNOUNCE_CHANNEL_IDS —
-// one pool of data, N places it speaks. Moving servers (or adding one) is a
-// config edit, not a code change.
-//
-// A fetch handler is included purely so a poll can be run on demand (for testing
-// and manual re-polls) without waiting for the top of the hour. It runs the exact
-// same poll() as the cron and is guarded by the TRIGGER_KEY secret.
+// The fetch handler exists so a poll can run on demand — guarded by the
+// TRIGGER_KEY secret; /refresh and manual testing use it.
 
 import {
   buildEntryEmbed,
   compareFilm,
+  compareRecency,
   countEntriesForUser,
+  displayNameMap,
   getActiveUsers,
   getAvatarUrl,
   getEntriesByFilmKey,
   getRecentEntries,
   insertEntries,
-  sendChannelMessage,
   setUserAvatar,
+  type DiscordEmbed,
   type EmbedContext,
   type LogEntry,
   type ParsedEntry,
@@ -54,8 +50,11 @@ export default {
 
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname !== "/poll") {
+    if (url.pathname === "/") {
       return new Response("moobie-poll is alive. GET /poll?key=... to run a poll.");
+    }
+    if (url.pathname !== "/poll") {
+      return new Response("not found", { status: 404 });
     }
     if (!env.TRIGGER_KEY || url.searchParams.get("key") !== env.TRIGGER_KEY) {
       return new Response("unauthorized", { status: 401 });
@@ -70,10 +69,7 @@ async function poll(env: Env): Promise<PollSummary> {
   const users = await getActiveUsers(env.DB);
   const summary: PollSummary = { users: users.length, inserted: 0, announced: 0, seeded: [] };
 
-  // username -> display name, for card rendering (author line + Others rows).
-  const displayNames = Object.fromEntries(
-    users.map((u) => [u.username, u.display_name ?? u.username]),
-  );
+  const displayNames = displayNameMap(users);
 
   for (const user of users) {
     const result = await pollUser(env, user, displayNames);
@@ -119,7 +115,7 @@ async function pollUser(
   // Post oldest first, so the channels read in the order films were watched.
   const avatarUrl = await ensureAvatar(env.DB, user);
   let announced = 0;
-  for (const entry of [...inserted].sort(byWatchedAscending)) {
+  for (const entry of [...inserted].sort(compareRecency)) {
     announced += await announce(env, entry, { avatarUrl, displayNames });
   }
   return { inserted: inserted.length, announced, seeded: false };
@@ -173,9 +169,24 @@ function announceChannels(env: Env): string[] {
     .filter(Boolean);
 }
 
-function byWatchedAscending(a: LogEntry, b: LogEntry): number {
-  const da = a.watched_date ?? "";
-  const db = b.watched_date ?? "";
-  if (da !== db) return da < db ? -1 : 1;
-  return a.guid < b.guid ? -1 : 1;
+const API_BASE = "https://discord.com/api/v10";
+
+/** POST one embed to a channel as the bot. Throws on a non-OK response. */
+async function sendChannelMessage(
+  botToken: string,
+  channelId: string,
+  embed: DiscordEmbed,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ embeds: [embed] }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Discord ${res.status} posting to channel ${channelId}: ${body}`);
+  }
 }
