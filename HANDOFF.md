@@ -130,7 +130,8 @@ Real bot token from the start. No webhooks at any point.
 - Create the Discord app + bot; invite to the guild.
 - **Announce:** poll Worker posts each genuinely new row (oldest watch first)
   via `POST /channels/{id}/messages` with the bot token, using
-  `buildEntryEmbed(entry, compareFilm(...))` from core.
+  `buildEntryEmbed(entry, compareFilm(...))` from core — to every channel in
+  `DISCORD_ANNOUNCE_CHANNEL_IDS`.
 - **Silent seed:** a user's *first* ingest is stored but never announced, so
   adding someone doesn't flood the channel.
 - **Slash commands:** Astro `/interactions` route. Ed25519 verification on the
@@ -186,7 +187,9 @@ Real bot token from the start. No webhooks at any point.
 | `DISCORD_PUBLIC_KEY`   | app (`/interactions` verify) | 2 |
 | `DISCORD_APP_ID`       | app + scripts  | 2     |
 | `DISCORD_GUILD_ID`     | app + scripts  | 2     |
-| `DISCORD_CHANNEL_ID`   | poll Worker (announce target) | 2 |
+Announce targets are **not** a secret: `DISCORD_ANNOUNCE_CHANNEL_IDS` (comma-separated
+channel ids — one data pool broadcast to N channels, can span servers) lives in
+`moobie-poll/wrangler.jsonc` vars. Moving/adding a server is a config edit.
 
 ---
 

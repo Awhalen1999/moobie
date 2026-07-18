@@ -1,6 +1,7 @@
-// Discord embeds — pure builders only (easy to eyeball and test). No delivery
-// lives here: sending happens in the bot (stage 2) via the Discord API with the
-// bot token. Embed JSON is identical either way, so these are ready as-is.
+// Discord out — pure embed builders (easy to eyeball and test) plus one thin
+// delivery function that posts as the bot (invariant #6: bot token, never
+// channel webhooks). The poll Worker announces new rows; the /interactions
+// route replies with the same embed shapes.
 
 import type { FilmComparison } from "./analytics.ts";
 import type { LogEntry } from "./types.ts";
@@ -69,6 +70,28 @@ export function buildEntryEmbed(
   if (fields.length > 0) embed.fields = fields;
 
   return embed;
+}
+
+const API_BASE = "https://discord.com/api/v10";
+
+/** POST one embed to a channel as the bot. Throws on a non-OK response. */
+export async function sendChannelMessage(
+  botToken: string,
+  channelId: string,
+  embed: DiscordEmbed,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ embeds: [embed] }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Discord ${res.status} posting to channel ${channelId}: ${body}`);
+  }
 }
 
 // --- helpers -------------------------------------------------------------
