@@ -55,6 +55,18 @@ const commands = [
     ],
   },
   {
+    name: "film-key",
+    description: "Exact film lookup by its Letterboxd URL slug",
+    options: [
+      {
+        type: STRING,
+        name: "key",
+        description: "The slug from the film's URL: letterboxd.com/film/<key>/",
+        required: true,
+      },
+    ],
+  },
+  {
     name: "stats",
     description: "Watching stats — the group's, or one person's",
     options: [

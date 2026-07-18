@@ -19,10 +19,11 @@ import {
   getEntriesByFilmKey,
   getEntriesForUser,
   getGroupStats,
+  findFilm,
+  getFilmCatalog,
   getRecentEntries,
   getUserStats,
   insertEntries,
-  searchFilms,
   stars,
   type DiscordEmbed,
   type UserStats,
@@ -81,6 +82,8 @@ export const POST: APIRoute = async ({ request }) => {
         return untrack(interaction);
       case "film":
         return film(interaction);
+      case "film-key":
+        return filmKey(interaction);
       case "stats":
         return statsCommand(interaction);
       case "vs":
@@ -157,17 +160,40 @@ async function untrack(interaction: Interaction): Promise<Response> {
   });
 }
 
-/** /film <title> — how everyone rated one film. */
+/**
+ * /film <title> — how everyone rated one film. Forgiving search: case,
+ * punctuation, and spacing don't matter (findFilm normalizes both sides).
+ */
 async function film(interaction: Interaction): Promise<Response> {
   const query = option(interaction, "title")?.trim();
   if (!query) return msg("Give me a film title to look up.");
 
-  const [match] = await searchFilms(env.DB, query, 1);
-  if (!match) return msg(`Nobody's logged anything matching “${query}” yet.`);
+  const match = findFilm(await getFilmCatalog(env.DB), query);
+  if (!match) {
+    return msg(
+      `Nobody's logged anything matching “${query}” yet. ` +
+        `If it should be there, try \`/film-key\` with the slug from the film's Letterboxd URL.`,
+    );
+  }
+  return filmCard(match.film_key);
+}
 
-  const comparison = compareFilm(await getEntriesByFilmKey(env.DB, match.film_key));
-  if (!comparison) return msg(`Nobody's logged anything matching “${query}” yet.`);
+/** /film-key <key> — exact lookup by the film's Letterboxd URL slug. */
+async function filmKey(interaction: Interaction): Promise<Response> {
+  const key = option(interaction, "key")?.trim().toLowerCase().replace(/\//g, "");
+  if (!key) return msg("Give me a film key to look up.");
+  return filmCard(
+    key,
+    `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`,
+  );
+}
 
+/** The shared /film + /film-key reply: comparison card for one film_key. */
+async function filmCard(filmKeyValue: string, notFound?: string): Promise<Response> {
+  const comparison = compareFilm(await getEntriesByFilmKey(env.DB, filmKeyValue));
+  if (!comparison) {
+    return msg(notFound ?? "Nobody's logged that yet.");
+  }
   return embeds(buildFilmEmbed(comparison, { displayNames: await displayNames() }));
 }
 

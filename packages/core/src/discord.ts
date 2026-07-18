@@ -3,7 +3,7 @@
 // channel webhooks). The poll Worker announces new rows; the /interactions
 // route replies with the same embed shapes.
 
-import type { FilmComparison } from "./analytics.ts";
+import type { FilmComparison, UserRating } from "./analytics.ts";
 import type { LogEntry } from "./types.ts";
 
 // Letterboxd's palette: green normally, orange when raters disagree.
@@ -99,8 +99,9 @@ export function buildEntryEmbed(
 }
 
 /**
- * Card for /film — one film across the whole group. Small poster (it's a
- * lookup card, not an announcement), one line per rater, summary in the footer.
+ * Card for /film and /film-key — one film across the whole group. Small poster
+ * (it's a lookup card, not an announcement), one line per rater, avg in the
+ * footer, and the name-vs-name gap field when raters disagree.
  */
 export function buildFilmEmbed(
   comparison: FilmComparison,
@@ -109,10 +110,10 @@ export function buildFilmEmbed(
   const { displayNames = {} } = context;
   const name = (username: string) => displayNames[username] ?? username;
 
+  const watched = comparison.ratings.length;
   const summary = [
-    `${comparison.ratings.length} watched`,
+    `${watched} watched`,
     comparison.average !== null ? `avg ${comparison.average}` : "",
-    comparison.spread !== null ? `${comparison.spread} apart` : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -122,13 +123,14 @@ export function buildFilmEmbed(
       ? `${comparison.film_title} (${comparison.film_year})`
       : comparison.film_title,
     url: `https://letterboxd.com/film/${comparison.film_key}/`,
-    description: comparison.ratings
-      .map((r) => `**${name(r.username)}** — ${stars(r.rating)}`)
-      .join("\n"),
+    description: comparison.ratings.map((r) => ratingLine(r, name)).join("\n"),
     color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
     footer: { text: summary },
   };
   if (comparison.poster_url) embed.thumbnail = { url: comparison.poster_url };
+
+  const gap = biggestGapField(comparison, name);
+  if (gap) embed.fields = [gap];
   return embed;
 }
 
@@ -170,18 +172,42 @@ function comparisonFields(
   if (others.length > 0) {
     fields.push({
       name: "Others",
-      value: others.map((r) => `**${name(r.username)}** — ${stars(r.rating)}`).join("\n"),
+      value: others.map((r) => ratingLine(r, name)).join("\n"),
     });
   }
 
-  if (comparison.disagreement && comparison.spread !== null) {
-    fields.push({
-      name: "⚠️ Disagreement",
-      value: `${comparison.spread} stars apart (avg ${comparison.average})`,
-    });
-  }
+  const gap = biggestGapField(comparison, name);
+  if (gap) fields.push(gap);
 
   return fields;
+}
+
+/** One rater's line on a card: name, stars, and their heart if they liked it. */
+function ratingLine(r: UserRating, name: (username: string) => string): string {
+  return `**${name(r.username)}** — ${stars(r.rating)}${r.liked ? " ❤️" : ""}`;
+}
+
+/**
+ * The two extreme raters, name vs name — shown only when the disagreement
+ * threshold trips, on both the announcement and the /film card.
+ */
+function biggestGapField(
+  comparison: FilmComparison | null,
+  name: (username: string) => string,
+): EmbedField | null {
+  if (!comparison?.disagreement || comparison.spread === null) return null;
+
+  const rated = comparison.ratings.filter((r) => r.rating !== null);
+  if (rated.length < 2) return null;
+  const hi = rated.reduce((a, b) => (b.rating! > a.rating! ? b : a));
+  const lo = rated.reduce((a, b) => (b.rating! < a.rating! ? b : a));
+
+  return {
+    name: "⚠️ Biggest gap",
+    value:
+      `**${name(hi.username)}** ${stars(hi.rating)} vs ` +
+      `**${name(lo.username)}** ${stars(lo.rating)} — ${comparison.spread} apart`,
+  };
 }
 
 function truncate(text: string, max: number): string {

@@ -9,7 +9,7 @@
 // Invariant #1: every write is INSERT OR IGNORE on a UNIQUE key, so re-ingesting
 // the same entry is a no-op and every writer is idempotent.
 
-import type { LogEntry, ParsedEntry, TrackedUser } from "./types.ts";
+import type { FilmCatalogEntry, LogEntry, ParsedEntry, TrackedUser } from "./types.ts";
 
 /** All users whose diaries we actively poll. */
 export function getActiveUsers(db: D1Database): Promise<TrackedUser[]> {
@@ -116,29 +116,18 @@ export function getEntriesForUser(
     .then((r) => r.results);
 }
 
-export interface FilmSearchHit {
-  film_key: string;
-  film_title: string;
-  entries: number;
-}
-
-/** Films whose title contains the query, most-logged first. */
-export function searchFilms(
-  db: D1Database,
-  query: string,
-  limit = 3,
-): Promise<FilmSearchHit[]> {
+/**
+ * The group's whole film catalog: one row per film with log count and recency.
+ * Small by construction (only films the group has logged), so title matching
+ * happens in code — see findFilm() in analytics — not in SQL.
+ */
+export function getFilmCatalog(db: D1Database): Promise<FilmCatalogEntry[]> {
   return db
     .prepare(
-      `SELECT film_key, film_title, COUNT(*) AS entries
-       FROM log_entries
-       WHERE film_title LIKE ?
-       GROUP BY film_key
-       ORDER BY entries DESC, film_title
-       LIMIT ?`,
+      `SELECT film_key, film_title, COUNT(*) AS entries, MAX(created_at) AS last_logged
+       FROM log_entries GROUP BY film_key`,
     )
-    .bind(`%${query}%`, limit)
-    .all<FilmSearchHit>()
+    .all<FilmCatalogEntry>()
     .then((r) => r.results);
 }
 

@@ -26,6 +26,14 @@ export interface LogEntry extends ParsedEntry {
   created_at: string; // ISO timestamp of when we ingested it
 }
 
+/** One film in the group's catalog (aggregated from log_entries). */
+export interface FilmCatalogEntry {
+  film_key: string;
+  film_title: string;
+  entries: number; // how many logs the group has for it
+  last_logged: string; // MAX(created_at) — recency tie-break for search
+}
+
 /** A row from the tracked_users table. */
 export interface TrackedUser {
   username: string;

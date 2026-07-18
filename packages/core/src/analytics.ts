@@ -3,7 +3,7 @@
 // in; the poll loop, the Discord commands, and the web API all share these exact
 // functions. Keep it that way: never load data or touch a route in here.
 
-import type { LogEntry } from "./types.ts";
+import type { FilmCatalogEntry, LogEntry } from "./types.ts";
 
 /** A single user's standing opinion on one film. */
 export interface UserRating {
@@ -11,6 +11,7 @@ export interface UserRating {
   rating: number | null; // null = logged but not rated
   watched_date: string | null;
   rewatch: number;
+  liked: number; // 0 | 1, the Letterboxd heart
 }
 
 /** The comparison of one film across everyone who has logged it. */
@@ -62,6 +63,45 @@ export function compareFilm(
     spread,
     disagreement: spread !== null && spread >= threshold,
   };
+}
+
+/**
+ * Find the film a human meant. Case, punctuation, and spacing insensitive:
+ * query and titles both collapse to lowercase alphanumerics, so "i, robot",
+ * "I ROBOT", and "irobot" all hit "I, Robot". Exact normalized match beats
+ * prefix beats substring; ties go to the most-logged film, then the most
+ * recently ingested. Returns null when nothing matches — the caller points
+ * people at /film-key, which is exact and always works.
+ */
+export function findFilm(
+  catalog: FilmCatalogEntry[],
+  query: string,
+): FilmCatalogEntry | null {
+  const q = normalizeTitle(query);
+  if (!q) return null;
+
+  let best: FilmCatalogEntry | null = null;
+  let bestRank = 0;
+  for (const film of catalog) {
+    const title = normalizeTitle(film.film_title);
+    const rank = title === q ? 3 : title.startsWith(q) ? 2 : title.includes(q) ? 1 : 0;
+    if (rank === 0) continue;
+    if (rank > bestRank || (rank === bestRank && best !== null && beats(film, best))) {
+      best = film;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
+function normalizeTitle(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Search tie-break: more logs wins, then most recently ingested. */
+function beats(a: FilmCatalogEntry, b: FilmCatalogEntry): boolean {
+  if (a.entries !== b.entries) return a.entries > b.entries;
+  return a.last_logged > b.last_logged;
 }
 
 /** Head-to-head taste comparison between two users (see compareUsers). */
@@ -159,6 +199,7 @@ function latestPerUser(entries: LogEntry[]): UserRating[] {
       rating: e.rating,
       watched_date: e.watched_date,
       rewatch: e.rewatch,
+      liked: e.liked,
     }));
 }
 
