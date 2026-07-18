@@ -206,7 +206,7 @@ function biggestGapField(
     name: "⚠️ Biggest gap",
     value:
       `**${name(hi.username)}** ${stars(hi.rating)} vs ` +
-      `**${name(lo.username)}** ${stars(lo.rating)} — ${comparison.spread} apart`,
+      `**${name(lo.username)}** ${stars(lo.rating)}`,
   };
 }
 
