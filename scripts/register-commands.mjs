@@ -79,24 +79,6 @@ const commands = [
     ],
   },
   {
-    name: "vs",
-    description: "Head-to-head taste comparison between two people",
-    options: [
-      {
-        type: STRING,
-        name: "user1",
-        description: "First Letterboxd username",
-        required: true,
-      },
-      {
-        type: STRING,
-        name: "user2",
-        description: "Second Letterboxd username",
-        required: true,
-      },
-    ],
-  },
-  {
     name: "refresh",
     description: "Check Letterboxd for new logs right now",
   },

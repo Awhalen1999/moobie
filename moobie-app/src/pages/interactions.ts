@@ -12,19 +12,16 @@ import {
   addTrackedUser,
   buildFilmEmbed,
   compareFilm,
-  compareUsers,
   deactivateTrackedUser,
+  findFilm,
   getAllTrackedUsers,
   getAvatarUrl,
   getEntriesByFilmKey,
-  getEntriesForUser,
-  getGroupStats,
-  findFilm,
   getFilmCatalog,
+  getGroupStats,
   getRecentEntries,
   getUserStats,
   insertEntries,
-  stars,
   type DiscordEmbed,
   type UserStats,
 } from "@moobie/core";
@@ -86,8 +83,6 @@ export const POST: APIRoute = async ({ request }) => {
         return filmKey(interaction);
       case "stats":
         return statsCommand(interaction);
-      case "vs":
-        return versus(interaction);
       case "refresh":
         return refresh(interaction);
     }
@@ -227,52 +222,6 @@ async function statsCommand(interaction: Interaction): Promise<Response> {
 function statsLine(s: UserStats): string {
   const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
   return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
-}
-
-/** /vs <user1> <user2> — head-to-head taste comparison. */
-async function versus(interaction: Interaction): Promise<Response> {
-  const u1 = option(interaction, "user1")?.trim().toLowerCase() ?? "";
-  const u2 = option(interaction, "user2")?.trim().toLowerCase() ?? "";
-  if (u1 === u2) return msg("That's just one person agreeing with themselves.");
-
-  const [a, b] = await Promise.all([
-    getEntriesForUser(env.DB, u1),
-    getEntriesForUser(env.DB, u2),
-  ]);
-  if (a.length === 0) return msg(`No entries for **${u1}** yet.`);
-  if (b.length === 0) return msg(`No entries for **${u2}** yet.`);
-
-  const names = await displayNames();
-  const nameA = names[u1] ?? u1;
-  const nameB = names[u2] ?? u2;
-
-  const h = compareUsers(a, b);
-  if (h.shared === 0) {
-    return msg(`**${nameA}** and **${nameB}** have no films in common yet.`);
-  }
-
-  const lines = [`🎬 **${h.shared}** films in common - **${h.bothRated}** rated by both`];
-  if (h.agreementPct !== null) {
-    lines.push(`🤝 within one star on **${h.agreementPct}%** · average gap **${h.avgGap}**`);
-  }
-
-  const embed: DiscordEmbed = {
-    title: `${nameA} vs ${nameB}`,
-    description: lines.join("\n"),
-    color: h.biggest && h.biggest.gap >= 1.5 ? 0xff8000 : MOOBIE_GREEN,
-  };
-  if (h.biggest && h.biggest.gap > 0) {
-    const filmName = h.biggest.film_year
-      ? `${h.biggest.film_title} (${h.biggest.film_year})`
-      : h.biggest.film_title;
-    embed.fields = [
-      {
-        name: "Biggest disagreement",
-        value: `**${filmName}** - ${nameA} ${stars(h.biggest.a)} vs ${nameB} ${stars(h.biggest.b)}`,
-      },
-    ];
-  }
-  return embeds(embed);
 }
 
 /** /refresh — run a poll right now instead of waiting for the top of the hour. */
