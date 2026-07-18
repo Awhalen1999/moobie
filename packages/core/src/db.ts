@@ -49,8 +49,8 @@ export async function insertEntries(
   const stmt = db.prepare(
     `INSERT OR IGNORE INTO log_entries
        (guid, username, film_key, film_title, film_year, poster_url,
-        rating, watched_date, rewatch, review, link, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        rating, watched_date, rewatch, liked, review, link, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   const inserted: LogEntry[] = [];
@@ -66,6 +66,7 @@ export async function insertEntries(
         e.rating,
         e.watched_date,
         e.rewatch,
+        e.liked,
         e.review,
         e.link,
         source,
@@ -98,13 +99,28 @@ export async function addTrackedUser(
   db: D1Database,
   username: string,
   discordId: string | null = null,
+  avatarUrl: string | null = null,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tracked_users (username, discord_id, active, added_at)
-       VALUES (?, ?, 1, ?)
-       ON CONFLICT(username) DO UPDATE SET active = 1`,
+      `INSERT INTO tracked_users (username, discord_id, avatar_url, active, added_at)
+       VALUES (?, ?, ?, 1, ?)
+       ON CONFLICT(username) DO UPDATE SET
+         active = 1,
+         avatar_url = COALESCE(excluded.avatar_url, avatar_url)`,
     )
-    .bind(username, discordId, new Date().toISOString())
+    .bind(username, discordId, avatarUrl, new Date().toISOString())
+    .run();
+}
+
+/** Store a user's Letterboxd avatar URL (fetched lazily by the poll). */
+export async function setUserAvatar(
+  db: D1Database,
+  username: string,
+  avatarUrl: string,
+): Promise<void> {
+  await db
+    .prepare("UPDATE tracked_users SET avatar_url = ? WHERE username = ?")
+    .bind(avatarUrl, username)
     .run();
 }

@@ -74,6 +74,7 @@ No `films` table. Film fields are **denormalized** into `log_entries`.
 |-----------------|---------|------------------------------------------|
 | username        | TEXT PK | Letterboxd username (lowercased)         |
 | discord_id      | TEXT    | for @mentions; nullable                  |
+| avatar_url      | TEXT    | Letterboxd pfp for embeds; fetched lazily; nullable |
 | active          | INTEGER | 1/0, soft-disable without deleting rows  |
 | last_seen_guid  | TEXT    | optional optimization; dedup is by guid regardless |
 | added_at        | TEXT    | ISO timestamp                            |
@@ -91,6 +92,7 @@ No `films` table. Film fields are **denormalized** into `log_entries`.
 | rating        | REAL    | 0.5–5.0 in half-steps; nullable                   |
 | watched_date  | TEXT    | ISO date                                          |
 | rewatch       | INTEGER | 1/0                                               |
+| liked         | INTEGER | 1/0, the Letterboxd heart (`letterboxd:memberLike`) |
 | review        | TEXT    | nullable                                          |
 | link          | TEXT    | canonical Letterboxd entry URL                    |
 | source        | TEXT    | 'rss' for v1 (future: 'csv', 'api')               |

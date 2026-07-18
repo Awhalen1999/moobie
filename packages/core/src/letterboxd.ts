@@ -37,6 +37,28 @@ export async function getRecentEntries(username: string): Promise<ParsedEntry[]>
   return parseEntries(await res.text(), username);
 }
 
+/**
+ * Best-effort avatar for a user, scraped from their profile page's og:image
+ * meta tag (the RSS feed carries no avatar). Returns null on any failure —
+ * an avatar is nice-to-have, never load-bearing.
+ */
+export async function getAvatarUrl(username: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${RSS_BASE}/${username}/`, {
+      headers: { "User-Agent": "moobie (https://moobie.awln.dev)" },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return (
+      html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/)?.[1] ??
+      html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/)?.[1] ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Parse raw RSS XML into diary entries. Pure — no network, easy to test. */
 export function parseEntries(xml: string, username: string): ParsedEntry[] {
   const doc = parser.parse(xml);
@@ -54,6 +76,7 @@ interface RssItem {
   "letterboxd:filmTitle"?: string;
   "letterboxd:filmYear"?: string;
   "letterboxd:memberRating"?: string;
+  "letterboxd:memberLike"?: string;
 }
 
 function toEntry(item: RssItem, username: string): ParsedEntry | null {
@@ -76,6 +99,7 @@ function toEntry(item: RssItem, username: string): ParsedEntry | null {
     rating: toFloat(item["letterboxd:memberRating"]),
     watched_date: watchedDate,
     rewatch: item["letterboxd:rewatch"] === "Yes" ? 1 : 0,
+    liked: item["letterboxd:memberLike"] === "Yes" ? 1 : 0,
     review: extractReview(item.description),
     link,
   };

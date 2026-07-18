@@ -19,52 +19,70 @@ interface EmbedField {
 }
 
 export interface DiscordEmbed {
-  author?: { name: string; url?: string };
+  author?: { name: string; url?: string; icon_url?: string };
   title: string;
   url?: string;
   description?: string;
-  thumbnail?: { url: string };
+  thumbnail?: { url: string }; // small, top-right
+  image?: { url: string }; // large, full-width
   fields?: EmbedField[];
   color: number;
   footer?: { text: string };
 }
 
-/** Render a 0.5–5.0 rating as stars, e.g. 3.5 -> "★★★½ (3.5)". Null -> "not rated". */
+/**
+ * Render a 0.5–5.0 rating as emoji stars, e.g. 3.5 -> "⭐ ⭐ ⭐ ½ (3.5)".
+ * Null -> "not rated". Discord can't letter-space or color text, so the gold
+ * comes from the emoji and the tracking is baked into the string.
+ */
 export function stars(rating: number | null): string {
   if (rating === null) return "not rated";
   const full = Math.floor(rating);
   const half = rating - full >= 0.5;
-  return `${"★".repeat(full)}${half ? "½" : ""} (${rating})`;
+  const glyphs = [...Array<string>(full).fill("⭐"), ...(half ? ["½"] : [])];
+  return `${glyphs.join(" ")} (${rating})`;
 }
 
 /**
  * Build the embed announcing one new diary entry. `comparison` is the result of
  * compareFilm() over every entry for this film (may be null if unavailable);
  * when present, other users' ratings and any disagreement are shown.
+ * `avatarUrl` is the logger's Letterboxd pfp, shown beside their name.
  */
 export function buildEntryEmbed(
   entry: LogEntry,
   comparison: FilmComparison | null,
+  avatarUrl: string | null = null,
 ): DiscordEmbed {
   const disagreement = comparison?.disagreement ?? false;
 
-  const lines = [`**${stars(entry.rating)}**${entry.rewatch ? " · ↻ rewatch" : ""}`];
-  if (entry.review) lines.push(`> ${truncate(entry.review, REVIEW_MAX)}`);
+  // Em-spaces (U+2003) keep clear air between the rating, the heart, and the
+  // rewatch marker without relying on consecutive-space rendering.
+  const rating = [
+    `**${stars(entry.rating)}**`,
+    entry.liked ? "❤️" : "",
+    entry.rewatch ? "🔁" : "",
+  ]
+    .filter(Boolean)
+    .join("\u2003");
 
   const embed: DiscordEmbed = {
     author: {
       name: `${entry.username} logged a film`,
       url: `https://letterboxd.com/${entry.username}/`,
+      ...(avatarUrl ? { icon_url: avatarUrl } : {}),
     },
     title: entry.film_year
       ? `${entry.film_title} (${entry.film_year})`
       : entry.film_title,
-    description: lines.join("\n"),
+    description: entry.review
+      ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
+      : rating,
     color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
-    footer: { text: `Watched ${entry.watched_date ?? "recently"}` },
+    footer: { text: `Watched ${friendlyDate(entry.watched_date) ?? "recently"}` },
   };
   if (entry.link) embed.url = entry.link;
-  if (entry.poster_url) embed.thumbnail = { url: entry.poster_url };
+  if (entry.poster_url) embed.image = { url: entry.poster_url };
 
   const fields = comparisonFields(entry, comparison);
   if (fields.length > 0) embed.fields = fields;
@@ -125,4 +143,17 @@ function comparisonFields(
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "2026-05-25" -> "May 25, 2026". Null (or unexpected shapes) -> null. */
+function friendlyDate(isoDate: string | null): string | null {
+  const m = isoDate?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${month} ${Number(m[3])}, ${m[1]}` : null;
 }

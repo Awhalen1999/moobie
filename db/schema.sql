@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS tracked_users (
   username        TEXT PRIMARY KEY,   -- Letterboxd username, lowercased
   discord_id      TEXT,               -- for @mentions; nullable
+  avatar_url      TEXT,               -- Letterboxd pfp; fetched lazily, nullable
   active          INTEGER NOT NULL DEFAULT 1,  -- 1/0 soft-disable
   last_seen_guid  TEXT,               -- optional optimization; dedup is by guid regardless
   added_at        TEXT NOT NULL       -- ISO timestamp
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS log_entries (
   rating        REAL,                  -- 0.5-5.0 half-steps; nullable (unrated logs)
   watched_date  TEXT,                  -- ISO date
   rewatch       INTEGER NOT NULL DEFAULT 0,  -- 1/0
+  liked         INTEGER NOT NULL DEFAULT 0,  -- 1/0, the Letterboxd heart
   review        TEXT,                  -- nullable
   link          TEXT,                  -- canonical Letterboxd entry URL
   source        TEXT NOT NULL DEFAULT 'rss',  -- 'rss' for v1 (future: 'csv', 'api')

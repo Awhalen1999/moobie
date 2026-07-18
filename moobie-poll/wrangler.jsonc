@@ -9,10 +9,10 @@
   },
   "vars": {
     // Where announcements go: comma-separated channel ids (one data pool,
-    // broadcast to N channels — can span servers). Currently #moobie-test.
-    // Not secrets — those go in via `wrangler secret put`
+    // broadcast to N channels — can span servers). Currently moobie's home
+    // server. Not secrets — those go in via `wrangler secret put`
     // (DISCORD_BOT_TOKEN, TRIGGER_KEY).
-    "DISCORD_ANNOUNCE_CHANNEL_IDS": "1527815106488963212"
+    "DISCORD_ANNOUNCE_CHANNEL_IDS": "1528009127505301716"
   },
   "d1_databases": [
     {

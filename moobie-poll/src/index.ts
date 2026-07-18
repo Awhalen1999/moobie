@@ -20,12 +20,15 @@ import {
   compareFilm,
   countEntriesForUser,
   getActiveUsers,
+  getAvatarUrl,
   getEntriesByFilmKey,
   getRecentEntries,
   insertEntries,
   sendChannelMessage,
+  setUserAvatar,
   type LogEntry,
   type ParsedEntry,
+  type TrackedUser,
 } from "@moobie/core";
 
 interface Env {
@@ -67,7 +70,7 @@ async function poll(env: Env): Promise<PollSummary> {
   const summary: PollSummary = { users: users.length, inserted: 0, announced: 0, seeded: [] };
 
   for (const user of users) {
-    const result = await pollUser(env, user.username);
+    const result = await pollUser(env, user);
     summary.inserted += result.inserted;
     summary.announced += result.announced;
     if (result.seeded) summary.seeded.push(user.username);
@@ -81,7 +84,9 @@ interface UserResult {
   seeded: boolean;
 }
 
-async function pollUser(env: Env, username: string): Promise<UserResult> {
+async function pollUser(env: Env, user: TrackedUser): Promise<UserResult> {
+  const username = user.username;
+
   // If we hold nothing for this user yet, this is their first ingest: insert the
   // backlog but stay quiet, so adding a user doesn't flood the channels with
   // ~50 posts. Announcements start on the next poll, for genuinely new logs.
@@ -102,19 +107,36 @@ async function pollUser(env: Env, username: string): Promise<UserResult> {
   }
 
   // Post oldest first, so the channels read in the order films were watched.
+  const avatarUrl = await ensureAvatar(env.DB, user);
   let announced = 0;
   for (const entry of [...inserted].sort(byWatchedAscending)) {
-    announced += await announce(env, entry);
+    announced += await announce(env, entry, avatarUrl);
   }
   return { inserted: inserted.length, announced, seeded: false };
 }
 
+/**
+ * The user's Letterboxd pfp for embeds. Fetched from their profile the first
+ * time it's needed, then served from the DB. Null (and retried next time) if
+ * the profile fetch fails — avatars are cosmetic, never blocking.
+ */
+async function ensureAvatar(db: D1Database, user: TrackedUser): Promise<string | null> {
+  if (user.avatar_url) return user.avatar_url;
+  const fetched = await getAvatarUrl(user.username);
+  if (fetched) await setUserAvatar(db, user.username, fetched);
+  return fetched;
+}
+
 /** Announce one entry to every configured channel. Returns how many posts landed. */
-async function announce(env: Env, entry: LogEntry): Promise<number> {
+async function announce(
+  env: Env,
+  entry: LogEntry,
+  avatarUrl: string | null,
+): Promise<number> {
   let embed;
   try {
     const filmEntries = await getEntriesByFilmKey(env.DB, entry.film_key);
-    embed = buildEntryEmbed(entry, compareFilm(filmEntries));
+    embed = buildEntryEmbed(entry, compareFilm(filmEntries), avatarUrl);
   } catch (err) {
     console.error(`moobie-poll: comparison failed for ${entry.guid}:`, err);
     return 0;

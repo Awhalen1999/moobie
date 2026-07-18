@@ -15,6 +15,7 @@ export interface ParsedEntry {
   rating: number | null; // 0.5–5.0 in half-steps, or null for unrated logs
   watched_date: string | null; // ISO date (YYYY-MM-DD)
   rewatch: number; // 0 | 1
+  liked: number; // 0 | 1, the Letterboxd heart
   review: string | null;
   link: string | null;
 }
@@ -29,6 +30,7 @@ export interface LogEntry extends ParsedEntry {
 export interface TrackedUser {
   username: string;
   discord_id: string | null;
+  avatar_url: string | null;
   active: number; // 0 | 1
   last_seen_guid: string | null;
   added_at: string;
