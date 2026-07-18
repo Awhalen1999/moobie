@@ -48,13 +48,6 @@ export interface EmbedContext {
   avatarUrl?: string | null;
   /** username -> display_name for everyone tracked; falls back to username. */
   displayNames?: Record<string, string>;
-  /**
-   * Review truncation length. Announcements keep the default (280) so the
-   * channel stays scannable; deliberate lookups like /review raise it.
-   */
-  reviewMax?: number;
-  /** Include the "Biggest gap" field. Announcements do; /review doesn't. */
-  includeGap?: boolean;
 }
 
 /**
@@ -67,12 +60,7 @@ export function buildEntryEmbed(
   comparison: FilmComparison | null,
   context: EmbedContext = {},
 ): DiscordEmbed {
-  const {
-    avatarUrl = null,
-    displayNames = {},
-    reviewMax = REVIEW_MAX,
-    includeGap = true,
-  } = context;
+  const { avatarUrl = null, displayNames = {} } = context;
   const name = (username: string) => displayNames[username] ?? username;
   const disagreement = comparison?.disagreement ?? false;
 
@@ -96,7 +84,7 @@ export function buildEntryEmbed(
       ? `${entry.film_title} (${entry.film_year})`
       : entry.film_title,
     description: entry.review
-      ? `${rating}\n> ${truncate(entry.review, reviewMax)}`
+      ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
       : rating,
     color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
     footer: { text: `Logged ${friendlyDate(entry.watched_date) ?? "recently"}` },
@@ -104,7 +92,7 @@ export function buildEntryEmbed(
   if (entry.link) embed.url = entry.link;
   if (entry.poster_url) embed.image = { url: entry.poster_url };
 
-  const fields = comparisonFields(entry, comparison, name, includeGap);
+  const fields = comparisonFields(entry, comparison, name);
   if (fields.length > 0) embed.fields = fields;
 
   return embed;
@@ -169,31 +157,26 @@ export async function sendChannelMessage(
 
 // --- helpers -------------------------------------------------------------
 
-/** Fields listing how everyone else rated this film, and a disagreement note. */
+/**
+ * The "Other reviews" field: how everyone else rated this film. Disagreement
+ * shows only as the orange stripe here — the named gap field is /film's job.
+ */
 function comparisonFields(
   entry: LogEntry,
   comparison: FilmComparison | null,
   name: (username: string) => string,
-  includeGap: boolean,
 ): EmbedField[] {
   if (!comparison) return [];
 
   const others = comparison.ratings.filter((r) => r.username !== entry.username);
-  const fields: EmbedField[] = [];
+  if (others.length === 0) return [];
 
-  if (others.length > 0) {
-    fields.push({
+  return [
+    {
       name: "Other reviews",
       value: others.map((r) => ratingLine(r, name)).join("\n"),
-    });
-  }
-
-  if (includeGap) {
-    const gap = biggestGapField(comparison, name);
-    if (gap) fields.push(gap);
-  }
-
-  return fields;
+    },
+  ];
 }
 
 /** One rater's line on a card: name, stars, and their heart if they liked it. */

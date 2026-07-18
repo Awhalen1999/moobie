@@ -228,9 +228,6 @@ async function reviewKey(interaction: Interaction): Promise<Response> {
   );
 }
 
-// Deliberate lookups get more of the review than channel announcements do.
-const REVIEW_LOOKUP_MAX = 1000;
-
 /** The shared /review + /review-key reply: one user's latest log of one film. */
 async function reviewCard(
   username: string,
@@ -257,14 +254,7 @@ async function reviewCard(
   );
   const avatarUrl = users.find((u) => u.username === username)?.avatar_url ?? null;
 
-  return embeds(
-    buildEntryEmbed(latest, comparison, {
-      avatarUrl,
-      displayNames,
-      reviewMax: REVIEW_LOOKUP_MAX,
-      includeGap: false,
-    }),
-  );
+  return embeds(buildEntryEmbed(latest, comparison, { avatarUrl, displayNames }));
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */
