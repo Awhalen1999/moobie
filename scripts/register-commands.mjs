@@ -67,6 +67,42 @@ const commands = [
     ],
   },
   {
+    name: "review",
+    description: "One person's latest log of a film - rating, heart, review",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Their Letterboxd username",
+        required: true,
+      },
+      {
+        type: STRING,
+        name: "title",
+        description: "Film title to look up",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "review-key",
+    description: "Same as /review, by the film's Letterboxd URL slug",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Their Letterboxd username",
+        required: true,
+      },
+      {
+        type: STRING,
+        name: "key",
+        description: "The slug from the film's URL: letterboxd.com/film/<key>/",
+        required: true,
+      },
+    ],
+  },
+  {
     name: "stats",
     description: "Logging stats — the pool's, or one person's",
     options: [

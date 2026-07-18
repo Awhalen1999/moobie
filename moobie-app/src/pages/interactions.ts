@@ -10,6 +10,7 @@ import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
 import {
   addTrackedUser,
+  buildEntryEmbed,
   buildFilmEmbed,
   compareFilm,
   deactivateTrackedUser,
@@ -81,6 +82,10 @@ export const POST: APIRoute = async ({ request }) => {
         return film(interaction);
       case "film-key":
         return filmKey(interaction);
+      case "review":
+        return review(interaction);
+      case "review-key":
+        return reviewKey(interaction);
       case "stats":
         return statsCommand(interaction);
       case "refresh":
@@ -190,6 +195,75 @@ async function filmCard(filmKeyValue: string, notFound?: string): Promise<Respon
     return msg(notFound ?? "Nobody's logged that yet.");
   }
   return embeds(buildFilmEmbed(comparison, { displayNames: await displayNames() }));
+}
+
+/**
+ * /review <username> <title> — one person's latest log of a film: rating,
+ * heart, and their review. Same forgiving title search as /film.
+ */
+async function review(interaction: Interaction): Promise<Response> {
+  const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
+  const query = option(interaction, "title")?.trim();
+  if (!query) return msg("Give me a film title to look up.");
+
+  const match = findFilm(await getFilmCatalog(env.DB), query);
+  if (!match) {
+    return msg(
+      `Nobody's logged anything matching “${query}” yet. ` +
+        `If it should be there, try \`/review-key\` with the film's Letterboxd URL slug.`,
+    );
+  }
+  return reviewCard(username, match.film_key);
+}
+
+/** /review-key <username> <key> — same card, exact lookup by URL slug. */
+async function reviewKey(interaction: Interaction): Promise<Response> {
+  const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
+  const key = option(interaction, "key")?.trim().toLowerCase().replace(/\//g, "");
+  if (!key) return msg("Give me a film key to look up.");
+  return reviewCard(
+    username,
+    key,
+    `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`,
+  );
+}
+
+// Deliberate lookups get more of the review than channel announcements do.
+const REVIEW_LOOKUP_MAX = 1000;
+
+/** The shared /review + /review-key reply: one user's latest log of one film. */
+async function reviewCard(
+  username: string,
+  filmKeyValue: string,
+  notFound?: string,
+): Promise<Response> {
+  const entries = await getEntriesByFilmKey(env.DB, filmKeyValue);
+  const comparison = compareFilm(entries);
+  if (!comparison) return msg(notFound ?? "Nobody's logged that yet.");
+
+  const latest = entries
+    .filter((e) => e.username === username)
+    .sort((a, b) => ((a.watched_date ?? "") < (b.watched_date ?? "") ? 1 : -1))[0];
+  if (!latest) {
+    const film = comparison.film_year
+      ? `${comparison.film_title} (${comparison.film_year})`
+      : comparison.film_title;
+    return msg(`**${username}** hasn't logged **${film}**.`);
+  }
+
+  const users = await getAllTrackedUsers(env.DB);
+  const displayNames = Object.fromEntries(
+    users.map((u) => [u.username, u.display_name ?? u.username]),
+  );
+  const avatarUrl = users.find((u) => u.username === username)?.avatar_url ?? null;
+
+  return embeds(
+    buildEntryEmbed(latest, comparison, {
+      avatarUrl,
+      displayNames,
+      reviewMax: REVIEW_LOOKUP_MAX,
+    }),
+  );
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */

@@ -48,6 +48,11 @@ export interface EmbedContext {
   avatarUrl?: string | null;
   /** username -> display_name for everyone tracked; falls back to username. */
   displayNames?: Record<string, string>;
+  /**
+   * Review truncation length. Announcements keep the default (280) so the
+   * channel stays scannable; deliberate lookups like /review raise it.
+   */
+  reviewMax?: number;
 }
 
 /**
@@ -60,7 +65,7 @@ export function buildEntryEmbed(
   comparison: FilmComparison | null,
   context: EmbedContext = {},
 ): DiscordEmbed {
-  const { avatarUrl = null, displayNames = {} } = context;
+  const { avatarUrl = null, displayNames = {}, reviewMax = REVIEW_MAX } = context;
   const name = (username: string) => displayNames[username] ?? username;
   const disagreement = comparison?.disagreement ?? false;
 
@@ -84,7 +89,7 @@ export function buildEntryEmbed(
       ? `${entry.film_title} (${entry.film_year})`
       : entry.film_title,
     description: entry.review
-      ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
+      ? `${rating}\n> ${truncate(entry.review, reviewMax)}`
       : rating,
     color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
     footer: { text: `Logged ${friendlyDate(entry.watched_date) ?? "recently"}` },
