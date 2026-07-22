@@ -1,0 +1,32 @@
+---
+// Bare site shell: fonts, tokens, and the pre-paint theme stamp. No header or
+// nav yet — navigation gets designed after the core pages exist.
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+}
+const { title = "moobie" } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content="A friend group's Letterboxd logs, mapped." />
+    <title>{title}</title>
+    <script is:inline>
+      // Stamp the theme before first paint: stored choice, else system.
+      const stored = localStorage.getItem("moobie-theme");
+      const dark = stored ? stored === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    </script>
+  </head>
+  <body>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

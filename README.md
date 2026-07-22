@@ -15,31 +15,41 @@ moobie/
 ├── db/schema.sql        2 tables (tracked_users, log_entries)
 ├── packages/core/       @moobie/core — queries, RSS parsing, analytics, cards
 ├── moobie-poll/         hourly Worker: check feeds, announce new logs
-└── moobie-app/          Astro app: /interactions (slash commands) + the site
+├── moobie-app/          Astro app: /interactions (slash commands) + the site
+└── docs/                architecture, operations, language, web style
 ```
 
 Both deploys import `@moobie/core`, so every query, parser, and card exists
-exactly once. [`PLAN.md`](./PLAN.md) has the full picture — data model,
-invariants, language, runbooks.
+exactly once. The docs: [architecture](./docs/architecture.md) (data model,
+invariants, status), [operations](./docs/operations.md) (dev, deploy,
+runbooks), [language](./docs/language.md) (vocabulary and voice),
+[style](./docs/style.md) (the web design system).
 
 ## Running it
 
+**The website** — one command, from anywhere in the repo:
+
 ```sh
 pnpm install
+pnpm dev          # → http://localhost:4321, hot reload, local D1
+```
 
-# local: apply the schema, set a dev key, run the Worker
+Dev uses wrangler's local D1 state (the adapter proxies the binding), so it
+never touches production data. Seed it once from `moobie-app/` with
+`pnpm exec wrangler d1 execute moobie --local --file=../db/schema.sql` plus
+whatever rows you want.
+
+**The bot's poll Worker** (rarely needed locally):
+
+```sh
 cd moobie-poll
 pnpm db:local
 cp .dev.vars.example .dev.vars
 pnpm dev --test-scheduled
 curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"   # fire the cron now
-
-# deploy — from each of moobie-poll/ and moobie-app/
-pnpm deploy
-
-# register slash commands (guild-scoped, instant)
-DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs
 ```
 
-Local dev must run under `wrangler dev` — the plain Astro dev server can't see
-D1. Secrets go in with `wrangler secret put`, never into the repo.
+**Ship it** — `pnpm deploy` from each of `moobie-app/` and `moobie-poll/`;
+slash commands re-register with `DISCORD_BOT_TOKEN=... node
+scripts/register-commands.mjs` (guild-scoped, instant). Secrets go in with
+`wrangler secret put`, never into the repo.

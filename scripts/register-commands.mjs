@@ -6,7 +6,7 @@
 
 const APP_ID = "1527818312837370036"; // app identity — never changes
 // moobie's home server; override per-server with DISCORD_GUILD_ID=... (the one
-// server-specific value here — see "Moving servers" in PLAN.md).
+// server-specific value here — see "Moving servers" in docs/operations.md).
 const GUILD_ID = process.env.DISCORD_GUILD_ID ?? "1528008510825168966";
 
 const STRING = 3; // Discord option type

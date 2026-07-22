@@ -102,6 +102,14 @@ export function getEntriesByFilmKey(
     .then((r) => r.results);
 }
 
+/** Every log entry in the pool, newest watch first. Powers the web graph. */
+export function getAllEntries(db: D1Database): Promise<LogEntry[]> {
+  return db
+    .prepare("SELECT * FROM log_entries ORDER BY watched_date DESC")
+    .all<LogEntry>()
+    .then((r) => r.results);
+}
+
 /** One user's whole history, newest watch first. */
 export function getEntriesForUser(
   db: D1Database,

@@ -27,7 +27,7 @@ export interface FilmComparison {
 }
 
 /** Ratings this far apart (in stars) count as a disagreement worth flagging. */
-export const DISAGREEMENT_THRESHOLD = 1.5;
+export const DISAGREEMENT_THRESHOLD = 3;
 
 /**
  * Compare one film across all its log entries. Pass every entry for a single

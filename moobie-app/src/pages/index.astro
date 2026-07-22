@@ -1,18 +1,614 @@
 ---
-
+// The graph — moobie's centerpiece. People and films as one force-directed
+// map: an edge is "this person logged this film", colored by their rating.
+// Shared films sit between the people who watched them; that's the whole idea.
+import Layout from "../layouts/Layout.astro";
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>moobie</title>
-	</head>
-	<body>
-		<h1>moobie</h1>
-		<p>A friend group's Letterboxd logs, announced to Discord. Site coming soon.</p>
-	</body>
-</html>
+<Layout title="moobie — the graph">
+  <section class="stage">
+    <div class="controls">
+      <div class="legend mono muted">
+        <span><i class="swatch" style="background: var(--high)"></i> ≥ 4</span>
+        <span><i class="swatch" style="background: var(--mid)"></i> 2.5 – 3.5</span>
+        <span><i class="swatch" style="background: var(--low)"></i> ≤ 2</span>
+        <span><i class="swatch dashed"></i> unrated</span>
+        <span><i class="swatch" style="border: 2px solid var(--beef); border-radius: 50%"></i> ≥ 3 apart</span>
+      </div>
+      <div class="strip-right">
+        <div class="view mono" role="group" aria-label="View">
+          <button id="view-shared" class="active">shared</button>
+          <button id="view-all">everything</button>
+        </div>
+        <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
+      </div>
+    </div>
+
+    <div class="board" id="board">
+      <canvas id="graph"></canvas>
+      <aside class="panel" id="panel" aria-live="polite" hidden></aside>
+      <p class="hint mono muted" id="tally">&nbsp;</p>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  import {
+    forceCenter,
+    forceCollide,
+    forceLink,
+    forceManyBody,
+    forceSimulation,
+    forceX,
+    forceY,
+  } from "d3-force";
+
+  interface Rater {
+    username: string;
+    rating: number | null;
+    liked: number;
+  }
+  interface Film {
+    key: string;
+    title: string;
+    year: number | null;
+    posterUrl: string | null;
+    average: number | null;
+    spread: number | null;
+    disagreement: boolean;
+    raters: Rater[];
+  }
+  interface Person {
+    username: string;
+    name: string;
+    avatarUrl: string | null;
+  }
+  interface Payload {
+    people: Person[];
+    films: Film[];
+    logs: number;
+  }
+
+  interface Node {
+    id: string;
+    kind: "person" | "film";
+    r: number;
+    person?: Person;
+    film?: Film;
+    x?: number;
+    y?: number;
+    fx?: number | null;
+    fy?: number | null;
+  }
+  interface Link {
+    source: Node | string;
+    target: Node | string;
+    rating: number | null;
+  }
+
+  const canvas = document.getElementById("graph") as HTMLCanvasElement;
+  const board = document.getElementById("board")!;
+  const panel = document.getElementById("panel")!;
+  const tally = document.getElementById("tally")!;
+  const ctx = canvas.getContext("2d")!;
+
+  // Design tokens, re-read whenever the theme flips.
+  let tokens = readTokens();
+  function readTokens() {
+    const s = getComputedStyle(document.documentElement);
+    return {
+      paper: s.getPropertyValue("--paper").trim(),
+      ink: s.getPropertyValue("--ink").trim(),
+      muted: s.getPropertyValue("--muted").trim(),
+      faint: s.getPropertyValue("--faint").trim(),
+      low: s.getPropertyValue("--low").trim(),
+      mid: s.getPropertyValue("--mid").trim(),
+      high: s.getPropertyValue("--high").trim(),
+      beef: s.getPropertyValue("--beef").trim(),
+    };
+  }
+  new MutationObserver(() => {
+    tokens = readTokens();
+    draw();
+  }).observe(document.documentElement, { attributeFilter: ["data-theme"] });
+
+  const bucket = (rating: number | null) =>
+    rating === null ? tokens.faint : rating <= 2 ? tokens.low : rating >= 4 ? tokens.high : tokens.mid;
+
+  const esc = (s: string) =>
+    s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+  // Letterboxd-style rating icons (user-made SVGs, inlined as currentColor).
+  const STAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.9121 1.59053C12.7508 1.2312 12.3936 1 11.9997 1C11.6059 1 11.2487 1.2312 11.0874 1.59053L8.27041 7.86702L1.43062 8.60661C1.03903 8.64895 0.708778 8.91721 0.587066 9.2918C0.465355 9.66639 0.574861 10.0775 0.866772 10.342L5.96556 14.9606L4.55534 21.6942C4.4746 22.0797 4.62768 22.4767 4.94632 22.7082C5.26497 22.9397 5.68983 22.9626 6.03151 22.7667L11.9997 19.3447L17.968 22.7667C18.3097 22.9626 18.7345 22.9397 19.0532 22.7082C19.3718 22.4767 19.5249 22.0797 19.4441 21.6942L18.0339 14.9606L23.1327 10.342C23.4246 10.0775 23.5341 9.66639 23.4124 9.2918C23.2907 8.91721 22.9605 8.64895 22.5689 8.60661L15.7291 7.86702L12.9121 1.59053Z" fill="currentColor"/></svg>`;
+  // Cropped viewBox: the half-star path only covers x 0–12, so the icon takes
+  // half a star's width instead of reserving a full star cell with a dead gap.
+  const HALF_STAR_SVG = `<svg class="half" viewBox="0 0 12 24" aria-hidden="true"><path d="M11.9997 1C11.6059 1 11.2487 1.2312 11.0874 1.59053L8.27041 7.86702L1.43062 8.60661C1.03903 8.64895 0.708778 8.91721 0.587066 9.2918C0.465355 9.66639 0.574861 10.0775 0.866772 10.342L5.96556 14.9606L4.55534 21.6942C4.4746 22.0797 4.62768 22.4767 4.94632 22.7082C5.26497 22.9397 5.68983 22.9626 6.03151 22.7667L11.9997 19.3447V1Z" fill="currentColor"/></svg>`;
+  const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9.1371C2 14 6.01943 16.5914 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371Z" fill="currentColor"/></svg>`;
+
+  /** One rating, Letterboxd-style: green stars and an orange heart. */
+  const ratingHtml = (rating: number | null, liked: number) => {
+    const stars =
+      rating === null
+        ? `<span class="mono muted">unrated</span>`
+        : `<span class="stars" aria-label="${rating} stars">` +
+          STAR_SVG.repeat(Math.floor(rating)) +
+          (rating % 1 ? HALF_STAR_SVG : "") +
+          `</span>`;
+    return `<span class="rating">${stars}${liked ? `<span class="heart">${HEART_SVG}</span>` : ""}</span>`;
+  };
+
+  // --- state ---------------------------------------------------------------
+
+  let data: Payload = { people: [], films: [], logs: 0 };
+  let nodes: Node[] = [];
+  let links: Link[] = [];
+  let sim: ReturnType<typeof forceSimulation<Node>> | null = null;
+  let sharedOnly = true;
+  let hovered: Node | null = null;
+  let focused: Node | null = null; // a clicked person
+  let pinned: Node | null = null; // a clicked film, kept in the panel
+  const avatars = new Map<string, HTMLImageElement>();
+  const kept = new Map<string, { x: number; y: number }>(); // positions across rebuilds
+
+  // --- simulation ------------------------------------------------------------
+
+  function build() {
+    if (sim) sim.stop();
+    for (const n of nodes) if (n.x !== undefined) kept.set(n.id, { x: n.x, y: n.y! });
+
+    const films = data.films.filter((f) => !sharedOnly || f.raters.length >= 2);
+    const people = data.people;
+
+    nodes = [
+      ...people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 26, person: p })),
+      ...films.map<Node>((f) => ({ id: `f:${f.key}`, kind: "film", r: 4 + f.raters.length * 3, film: f })),
+    ];
+    for (const n of nodes) {
+      const prev = kept.get(n.id);
+      if (prev) {
+        n.x = prev.x;
+        n.y = prev.y;
+      }
+    }
+    links = films.flatMap((f) =>
+      f.raters.map((r) => ({ source: `u:${r.username}`, target: `f:${f.key}`, rating: r.rating })),
+    );
+
+    sim = forceSimulation<Node>(nodes)
+      .force(
+        "link",
+        forceLink<Node, Link>(links)
+          .id((d) => d.id)
+          .distance((l) => 46 + ((l.target as Node).film?.raters.length ?? 1) * 8)
+          .strength(0.5),
+      )
+      .force("charge", forceManyBody<Node>().strength((d) => (d.kind === "person" ? -520 : -42)))
+      .force("collide", forceCollide<Node>((d) => d.r + (d.kind === "person" ? 16 : 5)))
+      .force("center", forceCenter(0, 0))
+      .force("x", forceX(0).strength(0.045))
+      .force("y", forceY(0).strength(0.06))
+      .on("tick", draw);
+    sim.alpha(1).restart();
+  }
+
+  // --- drawing ---------------------------------------------------------------
+
+  let width = 0;
+  let height = 0;
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    width = board.clientWidth;
+    height = canvas.clientHeight;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+  new ResizeObserver(resize).observe(board);
+
+  const inFocus = (n: Node): boolean => {
+    if (!focused) return true;
+    if (n === focused) return true;
+    return n.kind === "film" && !!n.film?.raters.some((r) => `u:${r.username}` === focused!.id);
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+
+    // Edges under everything.
+    for (const l of links) {
+      const s = l.source as Node;
+      const t = l.target as Node;
+      if (s.x === undefined || t.x === undefined) continue;
+      const dim = (focused && !(inFocus(s) && inFocus(t))) || (hovered?.kind === "person" && s !== hovered);
+      ctx.globalAlpha = dim ? 0.05 : l.rating === null ? 0.5 : 0.75;
+      ctx.strokeStyle = bucket(l.rating);
+      ctx.lineWidth = l.rating === null ? 1 : 2;
+      ctx.setLineDash(l.rating === null ? [3, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(s.x!, s.y!);
+      ctx.lineTo(t.x!, t.y!);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Films: circles — the graph is the site's one rounded exception.
+    // Shared ones fill with ink; beef gets a ring.
+    for (const n of nodes) {
+      if (n.kind !== "film" || n.x === undefined) continue;
+      const f = n.film!;
+      ctx.globalAlpha = inFocus(n) ? 1 : 0.08;
+      ctx.fillStyle = f.raters.length > 1 ? tokens.ink : tokens.paper;
+      ctx.strokeStyle = f.disagreement ? tokens.beef : tokens.ink;
+      ctx.lineWidth = f.disagreement ? 2.5 : 1;
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (n === hovered || n === pinned) {
+        ctx.strokeStyle = tokens.ink;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, n.r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // People: round avatars with a name plate.
+    for (const n of nodes) {
+      if (n.kind !== "person" || n.x === undefined) continue;
+      const p = n.person!;
+      const size = n.r * 2;
+      ctx.globalAlpha = inFocus(n) ? 1 : 0.15;
+      const img = p.avatarUrl ? avatars.get(p.username) : undefined;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
+      ctx.clip();
+      if (img?.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, n.x! - n.r, n.y! - n.r, size, size);
+      } else {
+        ctx.fillStyle = tokens.paper;
+        ctx.fillRect(n.x! - n.r, n.y! - n.r, size, size);
+      }
+      ctx.restore();
+      ctx.strokeStyle = tokens.ink;
+      ctx.lineWidth = n === hovered || n === focused ? 2.5 : 1.25;
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = "600 10px ui-monospace, 'SF Mono', Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const label = p.name.toLowerCase();
+      const w = ctx.measureText(label).width + 10;
+      ctx.fillStyle = tokens.paper;
+      ctx.fillRect(n.x! - w / 2, n.y! + n.r + 5, w, 15);
+      ctx.strokeStyle = tokens.ink;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(n.x! - w / 2, n.y! + n.r + 5, w, 15);
+      ctx.fillStyle = tokens.ink;
+      ctx.fillText(label, n.x!, n.y! + n.r + 9);
+    }
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // --- interaction -----------------------------------------------------------
+
+  function nodeAt(clientX: number, clientY: number): Node | null {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left - width / 2;
+    const y = clientY - rect.top - height / 2;
+    let best: Node | null = null;
+    let bestDist = Infinity;
+    for (const n of nodes) {
+      if (n.x === undefined) continue;
+      const d = Math.hypot(n.x! - x, n.y! - y);
+      if (d < Math.max(n.r + 8, 14) && d < bestDist) {
+        best = n;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  canvas.addEventListener("pointermove", (e) => {
+    const n = nodeAt(e.clientX, e.clientY);
+    if (n !== hovered) {
+      hovered = n;
+      canvas.style.cursor = n ? "pointer" : "default";
+      if (!pinned) renderPanel(n ?? focused);
+      draw();
+    }
+  });
+
+  canvas.addEventListener("pointerleave", () => {
+    hovered = null;
+    if (!pinned) renderPanel(focused);
+    draw();
+  });
+
+  canvas.addEventListener("click", (e) => {
+    const n = nodeAt(e.clientX, e.clientY);
+    if (n?.kind === "person") {
+      focused = focused === n ? null : n;
+      pinned = null;
+      renderPanel(focused);
+    } else if (n?.kind === "film") {
+      pinned = pinned === n ? null : n;
+      renderPanel(pinned ?? focused);
+    } else {
+      focused = null;
+      pinned = null;
+      renderPanel(null);
+    }
+    draw();
+  });
+
+  // --- panel -----------------------------------------------------------------
+
+  function renderPanel(n: Node | null) {
+    panel.hidden = n === null;
+    if (!n) {
+      panel.innerHTML = "";
+      return;
+    }
+    if (n.kind === "film") {
+      const f = n.film!;
+      const rows = f.raters
+        .map(
+          (r) =>
+            `<div class="row"><span class="mono">${esc(name(r.username))}</span>` +
+            ratingHtml(r.rating, r.liked) +
+            `</div>`,
+        )
+        .join("");
+      const gap =
+        f.spread !== null
+          ? `<p class="mono muted gap">gap <span${f.disagreement ? ` style="color: ${tokens.beef}"` : ""}>${f.spread}</span></p>`
+          : "";
+      panel.innerHTML =
+        (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +
+        `<h3 class="display">${esc(f.title)}${f.year ? ` <span class="muted">(${f.year})</span>` : ""}</h3>` +
+        rows +
+        (f.average !== null ? `<p class="mono muted avg">avg ${f.average}</p>` : "") +
+        gap;
+      return;
+    }
+    const p = n.person!;
+    const mine = data.films.filter((f) => f.raters.some((r) => r.username === p.username));
+    const ratings = mine
+      .map((f) => f.raters.find((r) => r.username === p.username)!.rating)
+      .filter((r): r is number => r !== null);
+    const liked = mine.filter((f) => f.raters.some((r) => r.username === p.username && r.liked)).length;
+    const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100 : null;
+    panel.innerHTML =
+      `<h3 class="person-name">${esc(p.name.toLowerCase())}</h3>` +
+      `<div class="row"><span class="mono">films</span><span class="mono">${mine.length}</span></div>` +
+      `<div class="row"><span class="mono">avg</span><span class="mono">${avg ?? "-"}</span></div>` +
+      `<div class="row"><span class="mono">liked</span><span class="mono">${liked}</span></div>`;
+  }
+
+  function name(username: string): string {
+    return data.people.find((p) => p.username === username)?.name ?? username;
+  }
+
+  // --- view toggle -------------------------------------------------------------
+
+  const btnShared = document.getElementById("view-shared")!;
+  const btnAll = document.getElementById("view-all")!;
+  function setView(shared: boolean) {
+    sharedOnly = shared;
+    btnShared.classList.toggle("active", shared);
+    btnAll.classList.toggle("active", !shared);
+    focused = null;
+    pinned = null;
+    renderPanel(null);
+    build();
+  }
+  btnShared.addEventListener("click", () => setView(true));
+  btnAll.addEventListener("click", () => setView(false));
+
+  document.getElementById("theme")!.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("moobie-theme", next);
+  });
+
+  // --- boot ----------------------------------------------------------------
+
+  const res = await fetch("/api/graph");
+  data = (await res.json()) as Payload;
+
+  for (const p of data.people) {
+    if (!p.avatarUrl) continue;
+    const img = new Image();
+    img.src = p.avatarUrl;
+    img.onload = () => draw();
+    avatars.set(p.username, img);
+  }
+
+  const shared = data.films.filter((f) => f.raters.length > 1).length;
+  tally.textContent = `${data.people.length} people · ${data.films.length} films (${shared} shared) · ${data.logs} logs`;
+
+  resize();
+  // The shared view is the point, but until the pool actually overlaps it
+  // would be an empty map - open on everything while shared films are scarce.
+  setView(shared >= 4);
+</script>
+
+<style>
+  /* The page is the graph: a controls strip, then the map fills the viewport. */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    padding: var(--space-1) var(--space-2);
+    border-bottom: var(--hairline);
+  }
+  .legend {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .legend .dashed {
+    border-top: 1px dashed var(--muted);
+    height: 0;
+    width: 0.8rem;
+    vertical-align: 0.15em;
+  }
+
+  .strip-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .view button {
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--ink);
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .view button + button {
+    border-left: none;
+  }
+  .view button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* Theme switch: an empty square in light, a filled one in dark. */
+  .theme {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: grid;
+    place-items: center;
+  }
+  .theme::before {
+    content: "";
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 1px solid var(--ink);
+    transition: background 0.2s ease;
+  }
+  :global([data-theme="dark"]) .theme::before {
+    background: var(--ink);
+  }
+
+  .board {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+  #graph {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .panel {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 16rem;
+    max-height: calc(100% - 2 * var(--space-2));
+    overflow-y: auto;
+    padding: var(--space-2);
+    background: var(--paper);
+    border: var(--rule);
+  }
+  .panel :global(h3) {
+    font-size: 1.5rem;
+    margin: 0.4rem 0 0.8rem;
+    font-weight: 400;
+  }
+  .panel :global(.person-name) {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    letter-spacing: 0.06em;
+  }
+  .panel :global(.poster) {
+    width: 100%;
+    border: var(--hairline);
+  }
+  .panel :global(.row) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0.4rem 0;
+    border-top: var(--hairline);
+  }
+  .panel :global(.rating) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .panel :global(.stars) {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    color: var(--star);
+  }
+  .panel :global(.stars svg) {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  .panel :global(.stars svg.half) {
+    width: 0.55rem;
+  }
+  .panel :global(.heart) {
+    display: inline-flex;
+    color: var(--heart);
+  }
+  .panel :global(.heart svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+  .panel :global(.avg) {
+    margin-top: 0.7rem;
+  }
+  .panel :global(.gap) {
+    margin-top: 0.2rem;
+  }
+
+  .hint {
+    position: absolute;
+    bottom: var(--space-1);
+    left: var(--space-2);
+  }
+
+  @media (max-width: 720px) {
+    .stage {
+      height: auto;
+    }
+    #graph {
+      height: 60vh;
+    }
+    .panel {
+      position: static;
+      width: auto;
+      border: none;
+      border-top: var(--rule);
+    }
+    .hint {
+      display: none;
+    }
+  }
+</style>

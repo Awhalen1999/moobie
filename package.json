@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Discord bot + web dashboard that logs a friend group's Letterboxd diaries.",
   "scripts": {
+    "dev": "pnpm --filter moobie-app dev",
     "db:remote": "wrangler d1 execute moobie --remote --file=./db/schema.sql"
   }
 }
