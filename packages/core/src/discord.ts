@@ -120,7 +120,7 @@ export function buildFilmEmbed(
 
   const summary = [
     `${comparison.ratings.length} logged`,
-    comparison.average !== null ? `\u2b50 avg ${comparison.average}` : "",
+    comparison.average !== null ? `⭐ avg ${comparison.average}` : "",
   ]
     .filter(Boolean)
     .join("\u2003");
@@ -290,8 +290,8 @@ function biggestGapField(
   return {
     name: "⚠️ Biggest gap",
     value:
-      `**${name(hi.username)}** ${stars(hi.rating)} vs ` +
-      `**${name(lo.username)}** ${stars(lo.rating)}`,
+      `**${name(hi.username)}** - ${stars(hi.rating)} vs ` +
+      `**${name(lo.username)}** - ${stars(lo.rating)}`,
   };
 }
 
