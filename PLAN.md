@@ -22,9 +22,9 @@ and no live Discord gateway connection — the bot is HTTP/cron only.
    hourly poll. Deployed and ingesting.
 2. **✅ Discord bot** — hourly announcement cards, plus the full slash-command
    set via the Ed25519-verified `/interactions` route: `/track`, `/untrack`,
-   `/film`, `/film-key`, `/review`, `/review-key`, `/best`, `/worst`, `/stats`,
-   `/refresh`. (`/vs` was cut — a better head-to-head is post-MVP; the old
-   implementation lives in git history.)
+   `/film`, `/film-key`, `/review`, `/review-key`, `/best`, `/worst`,
+   `/favorite`, `/stats`, `/refresh`. (`/vs` was cut — a better head-to-head is
+   post-MVP; the old implementation lives in git history.)
 3. **⬜ Frontend** — the work in front of us. See "Stage 3 plan" below.
 
 ---
@@ -128,8 +128,8 @@ take Letterboxd usernames as input.
 
 The cards: built by pure functions in `@moobie/core/discord` — `buildEntryEmbed`
 (announcements and `/review`), `buildFilmEmbed` (`/film`), `buildStatsEmbed`
-(`/stats`), `buildSuperlativeEmbed` (`/best`, `/worst`). Letterboxd green,
-orange when the disagreement threshold trips.
+(`/stats`), `buildSuperlativeEmbed` (`/best`, `/worst`), `buildFavoritesEmbed`
+(`/favorite`). Letterboxd green, orange when the disagreement threshold trips.
 
 Command registration: `scripts/register-commands.mjs`, guild-scoped so updates
 appear instantly (`DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs`).
@@ -166,6 +166,7 @@ surface; schema names keep their semantics: `watched_date`, `log_entries`.)
 | **feed** | a user's Letterboxd RSS source (never "diary" in bot text) |
 | **pool** | the tracked people and their data — one pool, shared across servers |
 | **server** | a Discord place moobie speaks in; joining/leaving never touches the pool |
+| **favorite** | a film someone liked — shown at its most recent liked log |
 | **track / untrack** | add a feed to the pool / soft-disable it |
 | **card** | any embed moobie posts |
 | **Biggest gap** | the disagreement field: the two extreme raters, shown when spread ≥ 1.5 |

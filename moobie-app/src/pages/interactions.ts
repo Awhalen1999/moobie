@@ -12,12 +12,14 @@ import {
   addTrackedUser,
   bestFilms,
   buildEntryEmbed,
+  buildFavoritesEmbed,
   buildFilmEmbed,
   buildStatsEmbed,
   buildSuperlativeEmbed,
   compareFilm,
   deactivateTrackedUser,
   displayNameMap,
+  favoriteFilms,
   filmTitle,
   findFilm,
   getAllTrackedUsers,
@@ -97,6 +99,8 @@ export const POST: APIRoute = async ({ request }) => {
         return best(interaction);
       case "worst":
         return worst(interaction);
+      case "favorite":
+        return favorite(interaction);
       case "stats":
         return stats(interaction);
       case "refresh":
@@ -271,6 +275,18 @@ async function superlativeCard(
   if (!superlative) return msg(`**${username}** hasn't rated anything yet.`);
 
   return embeds(buildSuperlativeEmbed(kind, superlative, await userContext(username)));
+}
+
+/** /favorite <username> — every film a person has liked, with their ratings. */
+async function favorite(interaction: Interaction): Promise<Response> {
+  const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
+  const entries = await getEntriesForUser(env.DB, username);
+  if (entries.length === 0) return msg(`No logs for **${username}** yet.`);
+
+  const favorites = favoriteFilms(entries);
+  if (favorites.length === 0) return msg(`**${username}** hasn't liked anything yet.`);
+
+  return embeds(buildFavoritesEmbed(favorites, await userContext(username)));
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */

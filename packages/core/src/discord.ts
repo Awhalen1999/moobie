@@ -20,7 +20,7 @@ interface EmbedField {
 
 export interface DiscordEmbed {
   author?: { name: string; url?: string; icon_url?: string };
-  title: string;
+  title?: string;
   url?: string;
   description?: string;
   thumbnail?: { url: string }; // small, top-right
@@ -160,13 +160,9 @@ export function buildStatsEmbed(
   };
 }
 
-/** "Also tied" films shown by name before collapsing to "+ N more". */
-const TIES_MAX = 10;
-
 /**
- * Card for /best and /worst — one person's films at one end of their ratings.
- * The most recently watched of the tie is featured with its poster; any other
- * tied films are listed below it.
+ * Card for /best and /worst — every film at one end of a person's ratings,
+ * rendered as the shared film-list card.
  */
 export function buildSuperlativeEmbed(
   kind: "best" | "worst",
@@ -174,41 +170,70 @@ export function buildSuperlativeEmbed(
   context: EmbedContext = {},
 ): DiscordEmbed {
   const { avatarUrl = null, displayNames = {} } = context;
-  const { featured, alsoTied } = superlative;
-  const name = displayNames[featured.username] ?? featured.username;
+  const { films } = superlative;
+  const name = displayNames[films[0]!.username] ?? films[0]!.username;
+  const plural = films.length === 1 ? "" : "s";
+  return filmListEmbed(
+    `${name}'s ${kind} film${plural}`,
+    films,
+    `${films.length} film${plural}`,
+    avatarUrl,
+  );
+}
 
-  const rating = [
-    `**${stars(superlative.rating)}**`,
-    featured.liked ? "❤️" : "",
-    featured.rewatch ? "🔁" : "",
-  ]
-    .filter(Boolean)
-    .join("\u2003");
+/**
+ * Card for /favorite — every film a person has liked, rendered as the shared
+ * film-list card.
+ */
+export function buildFavoritesEmbed(
+  favorites: LogEntry[],
+  context: EmbedContext = {},
+): DiscordEmbed {
+  const { avatarUrl = null, displayNames = {} } = context;
+  const name = displayNames[favorites[0]!.username] ?? favorites[0]!.username;
+  return filmListEmbed(
+    `${name}'s favorite films`,
+    favorites,
+    `${favorites.length} favorite${favorites.length === 1 ? "" : "s"}`,
+    avatarUrl,
+  );
+}
 
-  const lines = [rating];
-  if (alsoTied.length > 0) {
-    lines.push("Also tied:");
-    for (const e of alsoTied.slice(0, TIES_MAX)) {
-      const logged = friendlyDate(e.watched_date);
-      lines.push(`**${filmTitle(e)}**${logged ? ` - Logged ${logged}` : ""}`);
-    }
-    const more = alsoTied.length - TIES_MAX;
-    if (more > 0) lines.push(`+ ${more} more`);
-  }
+/** Films shown by name in a list card before collapsing to "+ N more". */
+const LIST_MAX = 25;
+
+/**
+ * The shared film-list card (/best, /worst, /favorite): no title, the person as
+ * the author line, one line per film ("**Title (Year)** - stars - Logged date"),
+ * most recently watched first, the most recent film's poster below, and a count
+ * in the footer. Pass at least one film (the routes guard the empty case).
+ */
+function filmListEmbed(
+  heading: string,
+  films: LogEntry[],
+  footer: string,
+  avatarUrl: string | null,
+): DiscordEmbed {
+  const first = films[0]!;
+
+  const lines = films.slice(0, LIST_MAX).map((e) => {
+    const logged = friendlyDate(e.watched_date);
+    return `**${filmTitle(e)}** - ${stars(e.rating)}${logged ? ` - Logged ${logged}` : ""}`;
+  });
+  const more = films.length - LIST_MAX;
+  if (more > 0) lines.push(`+ ${more} more`);
 
   const embed: DiscordEmbed = {
     author: {
-      name: `${name}'s ${kind} film${alsoTied.length > 0 ? "s" : ""}`,
-      url: `https://letterboxd.com/${featured.username}/`,
+      name: heading,
+      url: `https://letterboxd.com/${first.username}/`,
       ...(avatarUrl ? { icon_url: avatarUrl } : {}),
     },
-    title: filmTitle(featured),
     description: lines.join("\n"),
     color: COLOR_DEFAULT,
-    footer: { text: `Logged ${friendlyDate(featured.watched_date) ?? "recently"}` },
+    footer: { text: footer },
   };
-  if (featured.link) embed.url = featured.link;
-  if (featured.poster_url) embed.image = { url: featured.poster_url };
+  if (first.poster_url) embed.image = { url: first.poster_url };
   return embed;
 }
 

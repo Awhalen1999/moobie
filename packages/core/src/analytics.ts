@@ -107,8 +107,7 @@ function beats(a: FilmCatalogEntry, b: FilmCatalogEntry): boolean {
 /** One end of a user's ratings: their best (or worst) films (see bestFilms). */
 export interface Superlative {
   rating: number; // the extreme rating, in stars
-  featured: LogEntry; // the most recently watched of the tied films
-  alsoTied: LogEntry[]; // the other tied films, most recently watched first
+  films: LogEntry[]; // every film at that rating, most recently watched first
 }
 
 /** The films a user rated highest. Pass their full history. */
@@ -123,9 +122,8 @@ export function worstFilms(entries: LogEntry[]): Superlative | null {
 
 /**
  * The films at one end of a user's ratings. Each film counts once, at its most
- * recent *rated* log — so an unrated rewatch never erases a rating. Ties all
- * share the extreme rating; the most recently watched is featured. Returns
- * null when nothing is rated.
+ * recent *rated* log — so an unrated rewatch never erases a rating. Every film
+ * tied at the extreme rating is included. Returns null when nothing is rated.
  */
 function extreme(
   entries: LogEntry[],
@@ -139,10 +137,20 @@ function extreme(
     if (wins(e.rating!, target)) target = e.rating!;
   }
 
-  const tied = rated
+  const films = rated
     .filter((e) => e.rating === target)
     .sort((a, b) => compareRecency(b, a));
-  return { rating: target, featured: tied[0]!, alsoTied: tied.slice(1) };
+  return { rating: target, films };
+}
+
+/**
+ * The films a user has liked (the ❤️), each at its most recent liked log,
+ * most recently watched first. Pass their full history.
+ */
+export function favoriteFilms(entries: LogEntry[]): LogEntry[] {
+  return [...latestPerFilm(entries.filter((e) => e.liked === 1)).values()].sort(
+    (a, b) => compareRecency(b, a),
+  );
 }
 
 // --- helpers -------------------------------------------------------------

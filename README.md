@@ -12,7 +12,7 @@ stages, in order:
 1. **✅ Core backend** — schema, shared core package, RSS ingest, hourly poll.
 2. **✅ Discord bot** — real bot token (never webhooks). Announcements plus
    `/track`, `/untrack`, `/film`, `/film-key`, `/review`, `/review-key`,
-   `/best`, `/worst`, `/stats`, and `/refresh`.
+   `/best`, `/worst`, `/favorite`, `/stats`, and `/refresh`.
 3. **Frontend** — a few simple Astro pages over the same data. Up next.
 
 ## Layout
@@ -98,6 +98,6 @@ The D1 binding (`DB`) and database id are configured in both
 
 Stages 1 and 2 are live: hourly announcements with comparison cards, and the
 full command set (`/track`, `/untrack`, `/film`, `/film-key`, `/review`,
-`/review-key`, `/best`, `/worst`, `/stats`, `/refresh`) via the Ed25519-verified
-`/interactions` endpoint. Next up is the simple web frontend (stage 3). CSV history import is
+`/review-key`, `/best`, `/worst`, `/favorite`, `/stats`, `/refresh`) via the
+Ed25519-verified `/interactions` endpoint. Next up is the simple web frontend (stage 3). CSV history import is
 post-MVP. See PLAN.md for the stage-3 plan and the "Moving servers" runbook.

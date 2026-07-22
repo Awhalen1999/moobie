@@ -127,6 +127,18 @@ const commands = [
     ],
   },
   {
+    name: "favorite",
+    description: "Every film a person has liked",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Their Letterboxd username",
+        required: true,
+      },
+    ],
+  },
+  {
     name: "stats",
     description: "Logging stats - the pool's, or one person's",
     options: [
