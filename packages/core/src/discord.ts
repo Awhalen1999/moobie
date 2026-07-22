@@ -263,7 +263,7 @@ function comparisonFields(
 
 /** One rater's line on a card: name, stars, and their heart if they liked it. */
 function ratingLine(r: UserRating, name: (username: string) => string): string {
-  return `**${name(r.username)}** - ${stars(r.rating)}${r.liked ? " ❤️" : ""}`;
+  return `**${name(r.username)}** - ${stars(r.rating)}${r.liked ? "\u2003❤️" : ""}`;
 }
 
 // Em-spaces separate the stats — same visual rhythm as the rating rows on cards.
