@@ -137,17 +137,26 @@ async function finishTrack(
 ): Promise<void> {
   let content: string;
   try {
+    const existing = (await getAllTrackedUsers(env.DB)).find((u) => u.username === username);
     const entries = await getRecentEntries(username); // throws if the feed 404s
     const avatarUrl = await getAvatarUrl(username);
     await addTrackedUser(env.DB, username, { displayName, avatarUrl });
     const inserted = await insertEntries(env.DB, entries);
 
-    const shown = displayName ?? username;
-    content =
-      `🎬 Now tracking **${shown}** (` +
-      `[letterboxd.com/${username}](https://letterboxd.com/${username}/)). ` +
-      `Stored ${inserted.length} recent ${inserted.length === 1 ? "log" : "logs"} quietly - ` +
-      `new ones will be announced.`;
+    const shown = displayName ?? existing?.display_name ?? username;
+    const profile = `[letterboxd.com/${username}](https://letterboxd.com/${username}/)`;
+
+    if (existing?.active) {
+      content = `**${shown}** is already tracked (${profile}).${displayName ? " Details updated." : ""}`;
+    } else if (existing) {
+      content = `🎬 Tracking **${shown}** again (${profile}). New logs will be announced.`;
+    } else {
+      const stored =
+        inserted.length > 0
+          ? `Stored ${inserted.length} recent ${inserted.length === 1 ? "log" : "logs"} quietly - new ones will be announced.`
+          : "Nothing in their feed yet - new logs will be announced.";
+      content = `🎬 Now tracking **${shown}** (${profile}). ${stored}`;
+    }
   } catch (err) {
     // Reply stays friendly; the real error goes to the logs for forensics.
     console.error(`moobie-app: /track failed for "${username}":`, err);
