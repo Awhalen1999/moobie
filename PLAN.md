@@ -173,6 +173,11 @@ surface; schema names keep their semantics: `watched_date`, `log_entries`.)
 
 Bot-facing text uses plain hyphens, never em-dashes.
 
+**Voice.** Plain short sentences, nothing trying to be funny. Misses end in
+"yet" and carry no emoji; successes get exactly one leading emoji (🎬 👋 ✅).
+Never name the machinery (Workers, polling, RSS internals) in a reply. Passive
+is fine; system-speak ("automatically", "currently") is not.
+
 ## Invariants (do not violate)
 
 Code comments cite these by number — the numbering is stable.

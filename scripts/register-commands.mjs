@@ -56,7 +56,7 @@ const commands = [
   },
   {
     name: "film-key",
-    description: "Exact film lookup by its Letterboxd URL slug",
+    description: "Look up a film by its exact Letterboxd URL slug",
     options: [
       {
         type: STRING,

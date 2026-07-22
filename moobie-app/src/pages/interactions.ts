@@ -147,7 +147,7 @@ async function finishTrack(
       `🎬 Now tracking **${shown}** (` +
       `[letterboxd.com/${username}](https://letterboxd.com/${username}/)). ` +
       `Stored ${inserted.length} recent ${inserted.length === 1 ? "log" : "logs"} quietly - ` +
-      `new logs will be announced automatically.`;
+      `new ones will be announced.`;
   } catch (err) {
     // Reply stays friendly; the real error goes to the logs for forensics.
     console.error(`moobie-app: /track failed for "${username}":`, err);
@@ -165,7 +165,7 @@ async function untrack(interaction: Interaction): Promise<Response> {
   return msg(
     removed
       ? `👋 Stopped tracking **${username}**.`
-      : `**${username}** isn't currently tracked.`,
+      : `**${username}** isn't tracked.`,
   );
 }
 
@@ -249,7 +249,7 @@ function noMatch(query: string, keyCommand: string): string {
 
 /** Shared miss copy for the exact-key commands (/film-key, /review-key). */
 function keyNotFound(key: string): string {
-  return `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`;
+  return `No logs for \`${key}\` yet. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`;
 }
 
 /** /best <username> — the films a person rated highest. */
@@ -324,7 +324,7 @@ async function finishRefresh(interaction: Interaction): Promise<void> {
         : `✅ Checked ${s.users} ${feeds} - ${s.inserted} new, ${s.announced} announced.`;
   } catch (err) {
     console.error("moobie-app: /refresh failed:", err);
-    content = "Couldn't reach the poll Worker - try again in a minute.";
+    content = "Couldn't run the refresh - try again in a minute.";
   }
   await editReply(interaction, content);
 }
