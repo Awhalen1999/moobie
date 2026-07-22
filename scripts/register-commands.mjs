@@ -103,6 +103,30 @@ const commands = [
     ],
   },
   {
+    name: "best",
+    description: "The films a person rated highest",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Their Letterboxd username",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "worst",
+    description: "The films a person rated lowest",
+    options: [
+      {
+        type: STRING,
+        name: "username",
+        description: "Their Letterboxd username",
+        required: true,
+      },
+    ],
+  },
+  {
     name: "stats",
     description: "Logging stats - the pool's, or one person's",
     options: [

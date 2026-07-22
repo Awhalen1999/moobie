@@ -10,22 +10,28 @@ import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
 import {
   addTrackedUser,
+  bestFilms,
   buildEntryEmbed,
   buildFilmEmbed,
   buildStatsEmbed,
+  buildSuperlativeEmbed,
   compareFilm,
   deactivateTrackedUser,
   displayNameMap,
+  filmTitle,
   findFilm,
   getAllTrackedUsers,
   getAvatarUrl,
   getEntriesByFilmKey,
+  getEntriesForUser,
   getFilmCatalog,
   getGroupStats,
   getRecentEntries,
   getUserStats,
   insertEntries,
+  worstFilms,
   type DiscordEmbed,
+  type EmbedContext,
 } from "@moobie/core";
 
 export const prerender = false;
@@ -87,6 +93,10 @@ export const POST: APIRoute = async ({ request }) => {
         return review(interaction);
       case "review-key":
         return reviewKey(interaction);
+      case "best":
+        return best(interaction);
+      case "worst":
+        return worst(interaction);
       case "stats":
         return stats(interaction);
       case "refresh":
@@ -219,19 +229,10 @@ async function reviewCard(
   // Rows arrive newest-first (the query orders them), so the first hit wins.
   const latest = entries.find((e) => e.username === username);
   if (!latest) {
-    const film = comparison.film_year
-      ? `${comparison.film_title} (${comparison.film_year})`
-      : comparison.film_title;
-    return msg(`**${username}** hasn't logged **${film}**.`);
+    return msg(`**${username}** hasn't logged **${filmTitle(comparison)}**.`);
   }
 
-  const users = await getAllTrackedUsers(env.DB);
-  return embeds(
-    buildEntryEmbed(latest, comparison, {
-      avatarUrl: users.find((u) => u.username === username)?.avatar_url ?? null,
-      displayNames: displayNameMap(users),
-    }),
-  );
+  return embeds(buildEntryEmbed(latest, comparison, await userContext(username)));
 }
 
 /** Shared miss copy for the title-search commands (/film, /review). */
@@ -245,6 +246,31 @@ function noMatch(query: string, keyCommand: string): string {
 /** Shared miss copy for the exact-key commands (/film-key, /review-key). */
 function keyNotFound(key: string): string {
   return `No logs for \`${key}\`. The key is the slug in the film's Letterboxd URL: letterboxd.com/film/**the-key**/`;
+}
+
+/** /best <username> — the films a person rated highest. */
+async function best(interaction: Interaction): Promise<Response> {
+  return superlativeCard(interaction, "best");
+}
+
+/** /worst <username> — the films a person rated lowest. */
+async function worst(interaction: Interaction): Promise<Response> {
+  return superlativeCard(interaction, "worst");
+}
+
+/** The shared /best + /worst reply: featured poster plus any tied films. */
+async function superlativeCard(
+  interaction: Interaction,
+  kind: "best" | "worst",
+): Promise<Response> {
+  const username = option(interaction, "username")?.trim().toLowerCase() ?? "";
+  const entries = await getEntriesForUser(env.DB, username);
+  if (entries.length === 0) return msg(`No logs for **${username}** yet.`);
+
+  const superlative = (kind === "best" ? bestFilms : worstFilms)(entries);
+  if (!superlative) return msg(`**${username}** hasn't rated anything yet.`);
+
+  return embeds(buildSuperlativeEmbed(kind, superlative, await userContext(username)));
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */
@@ -292,6 +318,15 @@ async function finishRefresh(interaction: Interaction): Promise<void> {
 /** username -> display name for everyone ever tracked (fallback: username). */
 async function displayNames(): Promise<Record<string, string>> {
   return displayNameMap(await getAllTrackedUsers(env.DB));
+}
+
+/** Card context for one person's cards: their avatar, plus everyone's names. */
+async function userContext(username: string): Promise<EmbedContext> {
+  const users = await getAllTrackedUsers(env.DB);
+  return {
+    avatarUrl: users.find((u) => u.username === username)?.avatar_url ?? null,
+    displayNames: displayNameMap(users),
+  };
 }
 
 function msg(content: string): Response {

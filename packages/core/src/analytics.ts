@@ -104,7 +104,60 @@ function beats(a: FilmCatalogEntry, b: FilmCatalogEntry): boolean {
   return a.last_logged > b.last_logged;
 }
 
+/** One end of a user's ratings: their best (or worst) films (see bestFilms). */
+export interface Superlative {
+  rating: number; // the extreme rating, in stars
+  featured: LogEntry; // the most recently watched of the tied films
+  alsoTied: LogEntry[]; // the other tied films, most recently watched first
+}
+
+/** The films a user rated highest. Pass their full history. */
+export function bestFilms(entries: LogEntry[]): Superlative | null {
+  return extreme(entries, (rating, best) => rating > best);
+}
+
+/** The films a user rated lowest. Pass their full history. */
+export function worstFilms(entries: LogEntry[]): Superlative | null {
+  return extreme(entries, (rating, worst) => rating < worst);
+}
+
+/**
+ * The films at one end of a user's ratings. Each film counts once, at its most
+ * recent *rated* log — so an unrated rewatch never erases a rating. Ties all
+ * share the extreme rating; the most recently watched is featured. Returns
+ * null when nothing is rated.
+ */
+function extreme(
+  entries: LogEntry[],
+  wins: (rating: number, current: number) => boolean,
+): Superlative | null {
+  const rated = [...latestPerFilm(entries.filter((e) => e.rating !== null)).values()];
+  if (rated.length === 0) return null;
+
+  let target = rated[0]!.rating!;
+  for (const e of rated) {
+    if (wins(e.rating!, target)) target = e.rating!;
+  }
+
+  const tied = rated
+    .filter((e) => e.rating === target)
+    .sort((a, b) => compareRecency(b, a));
+  return { rating: target, featured: tied[0]!, alsoTied: tied.slice(1) };
+}
+
 // --- helpers -------------------------------------------------------------
+
+/** Collapse a history to one row per film (the most recent log of each). */
+function latestPerFilm(entries: LogEntry[]): Map<string, LogEntry> {
+  const byFilm = new Map<string, LogEntry>();
+  for (const e of entries) {
+    const current = byFilm.get(e.film_key);
+    if (!current || isNewer(e, current)) {
+      byFilm.set(e.film_key, e);
+    }
+  }
+  return byFilm;
+}
 
 /** Collapse to one row per user (their most recent watch), newest user first. */
 function latestPerUser(entries: LogEntry[]): UserRating[] {

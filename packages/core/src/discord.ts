@@ -3,7 +3,7 @@
 // and the /interactions replies share these shapes; sending lives with the poll
 // Worker (invariant #6: bot token, never channel webhooks).
 
-import type { FilmComparison, UserRating } from "./analytics.ts";
+import type { FilmComparison, Superlative, UserRating } from "./analytics.ts";
 import type { LogEntry, TrackedUser, UserStats } from "./types.ts";
 
 // Letterboxd's palette: green normally, orange when raters disagree.
@@ -55,6 +55,11 @@ export function displayNameMap(users: TrackedUser[]): Record<string, string> {
   return Object.fromEntries(users.map((u) => [u.username, u.display_name ?? u.username]));
 }
 
+/** "Title (Year)" — or just the title when the year is unknown. */
+export function filmTitle(film: { film_title: string; film_year: number | null }): string {
+  return film.film_year ? `${film.film_title} (${film.film_year})` : film.film_title;
+}
+
 /**
  * Build the embed announcing one new diary entry. `comparison` is the result of
  * compareFilm() over every entry for this film (may be null if unavailable);
@@ -85,9 +90,7 @@ export function buildEntryEmbed(
       url: `https://letterboxd.com/${entry.username}/`,
       ...(avatarUrl ? { icon_url: avatarUrl } : {}),
     },
-    title: entry.film_year
-      ? `${entry.film_title} (${entry.film_year})`
-      : entry.film_title,
+    title: filmTitle(entry),
     description: entry.review
       ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
       : rating,
@@ -123,9 +126,7 @@ export function buildFilmEmbed(
     .join("\u2003");
 
   const embed: DiscordEmbed = {
-    title: comparison.film_year
-      ? `${comparison.film_title} (${comparison.film_year})`
-      : comparison.film_title,
+    title: filmTitle(comparison),
     url: `https://letterboxd.com/film/${comparison.film_key}/`,
     description: comparison.ratings.map((r) => ratingLine(r, name)).join("\n"),
     color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
@@ -157,6 +158,58 @@ export function buildStatsEmbed(
       : stats.map((s) => `**${name(s.username)}**\n${statsLine(s)}`).join("\n\n"),
     color: COLOR_DEFAULT,
   };
+}
+
+/** "Also tied" films shown by name before collapsing to "+ N more". */
+const TIES_MAX = 10;
+
+/**
+ * Card for /best and /worst — one person's films at one end of their ratings.
+ * The most recently watched of the tie is featured with its poster; any other
+ * tied films are listed below it.
+ */
+export function buildSuperlativeEmbed(
+  kind: "best" | "worst",
+  superlative: Superlative,
+  context: EmbedContext = {},
+): DiscordEmbed {
+  const { avatarUrl = null, displayNames = {} } = context;
+  const { featured, alsoTied } = superlative;
+  const name = displayNames[featured.username] ?? featured.username;
+
+  const rating = [
+    `**${stars(superlative.rating)}**`,
+    featured.liked ? "❤️" : "",
+    featured.rewatch ? "🔁" : "",
+  ]
+    .filter(Boolean)
+    .join("\u2003");
+
+  const lines = [rating];
+  if (alsoTied.length > 0) {
+    lines.push("Also tied:");
+    for (const e of alsoTied.slice(0, TIES_MAX)) {
+      const logged = friendlyDate(e.watched_date);
+      lines.push(`**${filmTitle(e)}**${logged ? ` - Logged ${logged}` : ""}`);
+    }
+    const more = alsoTied.length - TIES_MAX;
+    if (more > 0) lines.push(`+ ${more} more`);
+  }
+
+  const embed: DiscordEmbed = {
+    author: {
+      name: `${name}'s ${kind} film${alsoTied.length > 0 ? "s" : ""}`,
+      url: `https://letterboxd.com/${featured.username}/`,
+      ...(avatarUrl ? { icon_url: avatarUrl } : {}),
+    },
+    title: filmTitle(featured),
+    description: lines.join("\n"),
+    color: COLOR_DEFAULT,
+    footer: { text: `Logged ${friendlyDate(featured.watched_date) ?? "recently"}` },
+  };
+  if (featured.link) embed.url = featured.link;
+  if (featured.poster_url) embed.image = { url: featured.poster_url };
+  return embed;
 }
 
 // --- helpers -------------------------------------------------------------

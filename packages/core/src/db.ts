@@ -102,6 +102,20 @@ export function getEntriesByFilmKey(
     .then((r) => r.results);
 }
 
+/** One user's whole history, newest watch first. */
+export function getEntriesForUser(
+  db: D1Database,
+  username: string,
+): Promise<LogEntry[]> {
+  return db
+    .prepare(
+      "SELECT * FROM log_entries WHERE username = ? ORDER BY watched_date DESC",
+    )
+    .bind(username)
+    .all<LogEntry>()
+    .then((r) => r.results);
+}
+
 /**
  * The group's whole film catalog: one row per film with log count and recency.
  * Small by construction (only films the group has logged), so title matching
