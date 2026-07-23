@@ -401,14 +401,20 @@ function option(interaction: Interaction, name: string): string | undefined {
 
 /** Edit the deferred "thinking…" reply. Auth is the interaction token itself. */
 async function editReply(interaction: Interaction, content: string): Promise<void> {
-  await fetch(
-    `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    },
-  );
+  try {
+    await fetch(
+      `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+  } catch (err) {
+    // Nothing to tell the user through a reply we can't edit - just leave a trace.
+    console.error("moobie-app: editReply failed:", err);
+  }
 }
 
 function json(payload: unknown): Response {

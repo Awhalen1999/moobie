@@ -13,6 +13,11 @@ import type { ParsedEntry } from "./types.ts";
 
 const RSS_BASE = "https://letterboxd.com";
 
+// Letterboxd occasionally stalls a connection instead of erroring (rate
+// limiting). Without a timeout that hangs the caller until the runtime kills
+// it silently; with one it becomes a normal thrown error the caller handles.
+const FETCH_TIMEOUT_MS = 30_000;
+
 // parseTagValue:false keeps every leaf a string, so a film literally titled
 // "1917" stays "1917" instead of becoming the number 1917. We convert the few
 // numeric fields ourselves, deliberately. htmlEntities:true decodes numeric
@@ -30,6 +35,7 @@ const parser = new XMLParser({
 export async function getRecentEntries(username: string): Promise<ParsedEntry[]> {
   const res = await fetch(`${RSS_BASE}/${username}/rss/`, {
     headers: { "User-Agent": "moobie (https://moobie.awln.dev)" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`Letterboxd RSS ${res.status} for "${username}"`);
@@ -46,6 +52,7 @@ export async function getAvatarUrl(username: string): Promise<string | null> {
   try {
     const res = await fetch(`${RSS_BASE}/${username}/`, {
       headers: { "User-Agent": "moobie (https://moobie.awln.dev)" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const html = await res.text();

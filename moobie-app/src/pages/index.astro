@@ -5,7 +5,7 @@
 import Layout from "../layouts/Layout.astro";
 ---
 
-<Layout title="moobie — the graph">
+<Layout>
   <section class="board" id="board">
     <canvas id="graph"></canvas>
     <div class="controls">
@@ -148,8 +148,8 @@ import Layout from "../layouts/Layout.astro";
     const people = data.people;
 
     nodes = [
-      ...people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 26, person: p })),
-      ...films.map<Node>((f) => ({ id: `f:${f.key}`, kind: "film", r: 4 + f.raters.length * 3, film: f })),
+      ...people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 17, person: p })),
+      ...films.map<Node>((f) => ({ id: `f:${f.key}`, kind: "film", r: 6 + f.raters.length * 3, film: f })),
     ];
     for (const n of nodes) {
       const prev = kept.get(n.id);
@@ -206,36 +206,46 @@ import Layout from "../layouts/Layout.astro";
     ctx.save();
     ctx.translate(width / 2, height / 2);
 
-    // Edges under everything.
+    // Edges, trimmed to each node's rim so they never show through the
+    // translucent dots — edge and dot read as one mark.
     for (const l of links) {
       const s = l.source as Node;
       const t = l.target as Node;
       if (s.x === undefined || t.x === undefined) continue;
+      const dx = t.x! - s.x!;
+      const dy = t.y! - s.y!;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= s.r + t.r) continue; // nodes touching - nothing to draw
+      const ux = dx / dist;
+      const uy = dy / dist;
       const dim = (focused && !(inFocus(s) && inFocus(t))) || (hovered?.kind === "person" && s !== hovered);
-      ctx.globalAlpha = dim ? 0.05 : l.rating === null ? 0.5 : 0.75;
+      ctx.globalAlpha = dim ? 0.05 : l.rating === null ? 0.5 : 0.72;
       ctx.strokeStyle = bucket(l.rating);
       ctx.lineWidth = l.rating === null ? 1 : 2;
       ctx.setLineDash(l.rating === null ? [3, 4] : []);
       ctx.beginPath();
-      ctx.moveTo(s.x!, s.y!);
-      ctx.lineTo(t.x!, t.y!);
+      ctx.moveTo(s.x! + ux * s.r, s.y! + uy * s.r);
+      ctx.lineTo(t.x! - ux * t.r, t.y! - uy * t.r);
       ctx.stroke();
     }
     ctx.setLineDash([]);
 
     // Films: circles — the graph is the site's one rounded exception.
-    // Shared ones fill with ink; beef gets a ring.
+    // Solo films wear their rating's bucket; shared films speak the card
+    // language: green when the room agrees, orange when the gap trips.
     for (const n of nodes) {
       if (n.kind !== "film" || n.x === undefined) continue;
       const f = n.film!;
-      ctx.globalAlpha = inFocus(n) ? 1 : 0.08;
-      ctx.fillStyle = f.raters.length > 1 ? tokens.ink : tokens.paper;
-      ctx.strokeStyle = f.disagreement ? tokens.beef : tokens.ink;
-      ctx.lineWidth = f.disagreement ? 2.5 : 1;
+      ctx.globalAlpha = inFocus(n) ? 0.72 : 0.08;
+      if (f.raters.length > 1) {
+        ctx.fillStyle = f.disagreement ? tokens.beef : f.average !== null ? tokens.high : tokens.ink;
+      } else {
+        const rating = f.raters[0]?.rating ?? null;
+        ctx.fillStyle = rating === null ? tokens.faint : bucket(rating);
+      }
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
       if (n === hovered || n === pinned) {
         ctx.strokeStyle = tokens.ink;
         ctx.lineWidth = 1;
@@ -263,24 +273,13 @@ import Layout from "../layouts/Layout.astro";
         ctx.fillRect(n.x! - n.r, n.y! - n.r, size, size);
       }
       ctx.restore();
-      ctx.strokeStyle = tokens.ink;
-      ctx.lineWidth = n === hovered || n === focused ? 2.5 : 1.25;
-      ctx.beginPath();
-      ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.font = "600 10px ui-monospace, 'SF Mono', Menlo, monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      const label = p.name.toLowerCase();
-      const w = ctx.measureText(label).width + 10;
-      ctx.fillStyle = tokens.paper;
-      ctx.fillRect(n.x! - w / 2, n.y! + n.r + 5, w, 15);
-      ctx.strokeStyle = tokens.ink;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(n.x! - w / 2, n.y! + n.r + 5, w, 15);
-      ctx.fillStyle = tokens.ink;
-      ctx.fillText(label, n.x!, n.y! + n.r + 9);
+      if (n === hovered || n === focused) {
+        ctx.strokeStyle = tokens.ink;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, n.r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -357,15 +356,20 @@ import Layout from "../layouts/Layout.astro";
             `</div>`,
         )
         .join("");
+      const rated = f.raters.filter((r) => r.rating !== null).length;
+      const avg =
+        f.average !== null && rated > 1
+          ? `<div class="row"><span class="mono">avg</span><span class="mono">${f.average}</span></div>`
+          : "";
       const gap =
         f.spread !== null
-          ? `<p class="mono muted gap">gap <span${f.disagreement ? ` style="color: ${tokens.beef}"` : ""}>${f.spread}</span></p>`
+          ? `<div class="row"><span class="mono">gap</span><span class="mono"${f.disagreement ? ` style="color: ${tokens.beef}"` : ""}>${f.spread}</span></div>`
           : "";
       panel.innerHTML =
         (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +
         `<h3 class="display">${esc(f.title)}${f.year ? ` <span class="muted">(${f.year})</span>` : ""}</h3>` +
         rows +
-        (f.average !== null ? `<p class="mono muted avg">avg ${f.average}</p>` : "") +
+        avg +
         gap;
       return;
     }
@@ -377,6 +381,7 @@ import Layout from "../layouts/Layout.astro";
     const liked = mine.filter((f) => f.raters.some((r) => r.username === p.username && r.liked)).length;
     const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100 : null;
     panel.innerHTML =
+      (p.avatarUrl ? `<img class="poster" src="${esc(p.avatarUrl)}" alt="" loading="lazy" />` : "") +
       `<h3 class="person-name">${esc(p.name.toLowerCase())}</h3>` +
       `<div class="row"><span class="mono">films</span><span class="mono">${mine.length}</span></div>` +
       `<div class="row"><span class="mono">avg</span><span class="mono">${avg ?? "-"}</span></div>` +
@@ -479,6 +484,12 @@ import Layout from "../layouts/Layout.astro";
   .board {
     position: relative;
     height: 100dvh;
+    /* Faint dot grid behind the map, Figma-style. */
+    background-image: radial-gradient(
+      color-mix(in srgb, var(--ink) 10%, transparent) 1px,
+      transparent 1.5px
+    );
+    background-size: 16px 16px;
   }
   #graph {
     display: block;
@@ -516,7 +527,6 @@ import Layout from "../layouts/Layout.astro";
     align-items: center;
     gap: var(--space-1);
     padding: 0.4rem 0;
-    border-top: var(--hairline);
   }
   .panel :global(.rating) {
     display: inline-flex;
@@ -544,13 +554,6 @@ import Layout from "../layouts/Layout.astro";
     width: 1rem;
     height: 1rem;
   }
-  .panel :global(.avg) {
-    margin-top: 0.7rem;
-  }
-  .panel :global(.gap) {
-    margin-top: 0.2rem;
-  }
-
   .hint {
     position: absolute;
     bottom: var(--space-1);

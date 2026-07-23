@@ -68,8 +68,10 @@ color. Identity is never color-alone: every colored mark has a legend entry.
 
 **Displayed ratings look like Letterboxd**: green SVG stars (+ a half-width
 half star) and an orange heart, inlined as `currentColor` paths in
-`index.astro`. The diverging buckets live on graph edges only — panels show
-ratings in brand colors, edges encode them as data.
+`index.astro`. The diverging buckets color the graph itself — edges by each
+rating, solo film dots by their one rating, shared film dots green
+(agreement) or `--beef` orange (gap ≥ 3), the same green/orange call the
+Discord cards make. Panels show ratings in brand colors.
 
 ## Interaction
 
