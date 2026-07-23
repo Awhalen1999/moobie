@@ -36,7 +36,8 @@ serif.
   `.display` (italic).
 
 Text always wears text tokens (`--ink`/`--muted`), never a data color — a
-colored mark next to it carries the meaning.
+colored mark next to it carries the meaning. (One deliberate exception: in
+the pair card's film table, the title itself wears the pair's gap color.)
 
 ## Corners and lines
 
@@ -72,6 +73,11 @@ half star) and an orange heart, inlined as `currentColor` paths in
 rating, solo film dots by their one rating, shared film dots green
 (agreement) or `--beef` orange (gap ≥ 3), the same green/orange call the
 Discord cards make. Panels show ratings in brand colors.
+
+The **people view** reuses the same poles pair-wise: one edge per pair who
+share films, width by how many they share, color by their average rating gap
+on those films (≤ 1 green, 1–2 mid, > 2 red; dashed when nothing is mutually
+rated).
 
 ## Interaction
 

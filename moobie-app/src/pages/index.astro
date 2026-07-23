@@ -9,11 +9,17 @@ import Layout from "../layouts/Layout.astro";
   <section class="board" id="board">
     <canvas id="graph"></canvas>
     <div class="controls">
-      <div class="view mono" role="group" aria-label="View">
+      <div class="top">
+        <div class="seg mono" role="group" aria-label="Graph">
+          <button id="mode-films" class="active">films</button>
+          <button id="mode-people">people</button>
+        </div>
+        <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
+      </div>
+      <div class="seg mono" role="group" aria-label="View" id="view-toggle">
         <button id="view-shared" class="active">shared</button>
         <button id="view-all">everything</button>
       </div>
-      <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
     </div>
     <aside class="panel" id="panel" aria-live="polite" hidden></aside>
     <p class="hint mono muted" id="tally">&nbsp;</p>
@@ -68,10 +74,18 @@ import Layout from "../layouts/Layout.astro";
     fx?: number | null;
     fy?: number | null;
   }
+  interface PairFilm {
+    title: string;
+    ra: number | null; // first name's rating (names sorted)
+    rb: number | null;
+  }
   interface Link {
     source: Node | string;
     target: Node | string;
-    rating: number | null;
+    rating?: number | null; // films mode: one person's rating of one film
+    shared?: number; // people mode: films the pair both logged
+    avgGap?: number | null; // people mode: mean rating gap on those films
+    films?: PairFilm[]; // people mode: the shared films themselves
   }
 
   const canvas = document.getElementById("graph") as HTMLCanvasElement;
@@ -131,26 +145,80 @@ import Layout from "../layouts/Layout.astro";
   let nodes: Node[] = [];
   let links: Link[] = [];
   let sim: ReturnType<typeof forceSimulation<Node>> | null = null;
+  let mode: "films" | "people" = "films";
   let sharedOnly = true;
   let hovered: Node | null = null;
   let focused: Node | null = null; // a clicked person
   let pinned: Node | null = null; // a clicked film, kept in the panel
+  let hoveredLink: Link | null = null; // people mode: a hovered pair edge
+  let pinnedLink: Link | null = null; // people mode: a clicked pair edge
   const avatars = new Map<string, HTMLImageElement>();
   const kept = new Map<string, { x: number; y: number }>(); // positions across rebuilds
 
   // --- simulation ------------------------------------------------------------
 
+  /** One link per pair of people who share films: count, avg gap, the list. */
+  function peopleLinks(): Link[] {
+    const pairs = new Map<string, { gapSum: number; rated: number; films: PairFilm[] }>();
+    for (const f of data.films) {
+      for (let i = 0; i < f.raters.length; i++) {
+        for (let j = i + 1; j < f.raters.length; j++) {
+          const a = f.raters[i]!;
+          const b = f.raters[j]!;
+          const key = [a.username, b.username].sort().join("|");
+          let p = pairs.get(key);
+          if (!p) {
+            p = { gapSum: 0, rated: 0, films: [] };
+            pairs.set(key, p);
+          }
+          const first = key.split("|")[0] === a.username ? a : b;
+          const second = first === a ? b : a;
+          p.films.push({ title: f.title, ra: first.rating, rb: second.rating });
+          if (a.rating !== null && b.rating !== null) {
+            p.gapSum += Math.abs(a.rating - b.rating);
+            p.rated++;
+          }
+        }
+      }
+    }
+    return [...pairs.entries()].map(([key, p]) => {
+      const [a, b] = key.split("|");
+      // Biggest disagreements first; films missing a rating sink to the end.
+      p.films.sort((x, y) => (pairGap(y) ?? -1) - (pairGap(x) ?? -1));
+      return {
+        source: `u:${a}`,
+        target: `u:${b}`,
+        shared: p.films.length,
+        avgGap: p.rated ? Math.round((p.gapSum / p.rated) * 100) / 100 : null,
+        films: p.films,
+      };
+    });
+  }
+
+  const pairGap = (f: PairFilm) => (f.ra !== null && f.rb !== null ? Math.abs(f.ra - f.rb) : null);
+
+  /** Color for a pair's average gap: close is green, far is red. */
+  const gapColor = (avgGap: number | null) =>
+    avgGap === null ? tokens.faint : avgGap <= 1 ? tokens.high : avgGap <= 2 ? tokens.mid : tokens.low;
+
   function build() {
     if (sim) sim.stop();
     for (const n of nodes) if (n.x !== undefined) kept.set(n.id, { x: n.x, y: n.y! });
 
-    const films = data.films.filter((f) => !sharedOnly || f.raters.length >= 2);
-    const people = data.people;
+    if (mode === "people") {
+      nodes = data.people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 22, person: p }));
+      links = peopleLinks();
+    } else {
+      const films = data.films.filter((f) => !sharedOnly || f.raters.length >= 2);
+      nodes = [
+        ...data.people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 17, person: p })),
+        ...films.map<Node>((f) => ({ id: `f:${f.key}`, kind: "film", r: 6 + f.raters.length * 3, film: f })),
+      ];
+      links = films.flatMap((f) =>
+        f.raters.map((r) => ({ source: `u:${r.username}`, target: `f:${f.key}`, rating: r.rating })),
+      );
+    }
 
-    nodes = [
-      ...people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 17, person: p })),
-      ...films.map<Node>((f) => ({ id: `f:${f.key}`, kind: "film", r: 6 + f.raters.length * 3, film: f })),
-    ];
     for (const n of nodes) {
       const prev = kept.get(n.id);
       if (prev) {
@@ -158,19 +226,25 @@ import Layout from "../layouts/Layout.astro";
         n.y = prev.y;
       }
     }
-    links = films.flatMap((f) =>
-      f.raters.map((r) => ({ source: `u:${r.username}`, target: `f:${f.key}`, rating: r.rating })),
-    );
 
     sim = forceSimulation<Node>(nodes)
       .force(
         "link",
         forceLink<Node, Link>(links)
           .id((d) => d.id)
-          .distance((l) => 46 + ((l.target as Node).film?.raters.length ?? 1) * 8)
-          .strength(0.5),
+          .distance((l) =>
+            mode === "people"
+              ? 150 - Math.min(l.shared ?? 1, 10) * 7
+              : 46 + ((l.target as Node).film?.raters.length ?? 1) * 8,
+          )
+          .strength(mode === "people" ? 0.4 : 0.5),
       )
-      .force("charge", forceManyBody<Node>().strength((d) => (d.kind === "person" ? -520 : -42)))
+      .force(
+        "charge",
+        forceManyBody<Node>().strength((d) =>
+          mode === "people" ? -500 : d.kind === "person" ? -520 : -42,
+        ),
+      )
       .force("collide", forceCollide<Node>((d) => d.r + (d.kind === "person" ? 16 : 5)))
       .force("center", forceCenter(0, 0))
       .force("x", forceX(0).strength(0.045))
@@ -195,9 +269,12 @@ import Layout from "../layouts/Layout.astro";
   }
   new ResizeObserver(resize).observe(board);
 
+  const touches = (l: Link, n: Node) => l.source === n || l.target === n;
+
   const inFocus = (n: Node): boolean => {
     if (!focused) return true;
     if (n === focused) return true;
+    if (mode === "people") return links.some((l) => touches(l, n) && touches(l, focused!));
     return n.kind === "film" && !!n.film?.raters.some((r) => `u:${r.username}` === focused!.id);
   };
 
@@ -218,11 +295,23 @@ import Layout from "../layouts/Layout.astro";
       if (dist <= s.r + t.r) continue; // nodes touching - nothing to draw
       const ux = dx / dist;
       const uy = dy / dist;
-      const dim = (focused && !(inFocus(s) && inFocus(t))) || (hovered?.kind === "person" && s !== hovered);
-      ctx.globalAlpha = dim ? 0.05 : l.rating === null ? 0.5 : 0.72;
-      ctx.strokeStyle = bucket(l.rating);
-      ctx.lineWidth = l.rating === null ? 1 : 2;
-      ctx.setLineDash(l.rating === null ? [3, 4] : []);
+      const dim =
+        (focused && !(touches(l, focused) || (mode === "films" && inFocus(s) && inFocus(t)))) ||
+        (hovered?.kind === "person" && !touches(l, hovered));
+      if (mode === "people") {
+        const gap = l.avgGap ?? null;
+        const sel = pinnedLink ?? hoveredLink;
+        const active = sel === l;
+        ctx.globalAlpha = dim || (sel && !active) ? 0.08 : active ? 0.95 : gap === null ? 0.5 : 0.72;
+        ctx.strokeStyle = gapColor(gap);
+        ctx.lineWidth = 1 + Math.min(l.shared ?? 1, 8) * 0.75 + (active ? 1 : 0);
+        ctx.setLineDash(gap === null ? [3, 4] : []);
+      } else {
+        ctx.globalAlpha = dim ? 0.05 : l.rating === null ? 0.5 : 0.72;
+        ctx.strokeStyle = bucket(l.rating ?? null);
+        ctx.lineWidth = l.rating === null ? 1 : 2;
+        ctx.setLineDash(l.rating === null ? [3, 4] : []);
+      }
       ctx.beginPath();
       ctx.moveTo(s.x! + ux * s.r, s.y! + uy * s.r);
       ctx.lineTo(t.x! - ux * t.r, t.y! - uy * t.r);
@@ -305,36 +394,81 @@ import Layout from "../layouts/Layout.astro";
     return best;
   }
 
+  /** The pair edge under the pointer (people mode only). Nodes win over edges. */
+  function linkAt(clientX: number, clientY: number): Link | null {
+    if (mode !== "people") return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left - width / 2;
+    const y = clientY - rect.top - height / 2;
+    let best: Link | null = null;
+    let bestDist = Infinity;
+    for (const l of links) {
+      const s = l.source as Node;
+      const t = l.target as Node;
+      if (s.x === undefined || t.x === undefined) continue;
+      const dx = t.x! - s.x!;
+      const dy = t.y! - s.y!;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) continue;
+      const u = Math.max(0, Math.min(1, ((x - s.x!) * dx + (y - s.y!) * dy) / len2));
+      const d = Math.hypot(x - (s.x! + u * dx), y - (s.y! + u * dy));
+      const reach = (1 + Math.min(l.shared ?? 1, 8) * 0.75) / 2 + 5;
+      if (d < reach && d < bestDist) {
+        best = l;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  /** Panel priority: pinned things, then hovered things, then the focus. */
+  function refreshPanel() {
+    if (pinned) return renderPanel(pinned);
+    if (pinnedLink) return renderPairPanel(pinnedLink);
+    if (hovered) return renderPanel(hovered);
+    if (hoveredLink) return renderPairPanel(hoveredLink);
+    renderPanel(focused);
+  }
+
   canvas.addEventListener("pointermove", (e) => {
     const n = nodeAt(e.clientX, e.clientY);
-    if (n !== hovered) {
+    const l = n ? null : linkAt(e.clientX, e.clientY);
+    if (n !== hovered || l !== hoveredLink) {
       hovered = n;
-      canvas.style.cursor = n ? "pointer" : "default";
-      if (!pinned) renderPanel(n ?? focused);
+      hoveredLink = l;
+      canvas.style.cursor = n || l ? "pointer" : "default";
+      if (!pinned && !pinnedLink) refreshPanel();
       draw();
     }
   });
 
   canvas.addEventListener("pointerleave", () => {
     hovered = null;
-    if (!pinned) renderPanel(focused);
+    hoveredLink = null;
+    if (!pinned && !pinnedLink) refreshPanel();
     draw();
   });
 
   canvas.addEventListener("click", (e) => {
     const n = nodeAt(e.clientX, e.clientY);
+    const l = n ? null : linkAt(e.clientX, e.clientY);
     if (n?.kind === "person") {
       focused = focused === n ? null : n;
       pinned = null;
-      renderPanel(focused);
+      pinnedLink = null;
     } else if (n?.kind === "film") {
       pinned = pinned === n ? null : n;
-      renderPanel(pinned ?? focused);
+      pinnedLink = null;
+    } else if (l) {
+      pinnedLink = pinnedLink === l ? null : l;
+      pinned = null;
+      focused = null;
     } else {
       focused = null;
       pinned = null;
-      renderPanel(null);
+      pinnedLink = null;
     }
+    refreshPanel();
     draw();
   });
 
@@ -392,18 +526,85 @@ import Layout from "../layouts/Layout.astro";
     return data.people.find((p) => p.username === username)?.name ?? username;
   }
 
-  // --- view toggle -------------------------------------------------------------
+  const PAIR_LIST_MAX = 12;
+  const num = (r: number | null) => (r === null ? "-" : `${r}`);
 
+  /** A small square avatar for pair cards; a faint block when there's none. */
+  const mini = (p: Person) =>
+    p.avatarUrl
+      ? `<img class="mini" src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" loading="lazy" />`
+      : `<span class="mini"></span>`;
+
+  /**
+   * The pair card: both pfps and names, the pair's numbers, then the shared
+   * films as a two-column table — each person's rating under their own face.
+   */
+  function renderPairPanel(l: Link) {
+    panel.hidden = false;
+    const a = (l.source as Node).person!;
+    const b = (l.target as Node).person!;
+    const films = l.films ?? [];
+
+    const rows = films
+      .slice(0, PAIR_LIST_MAX)
+      .map((f) => {
+        const gap = pairGap(f);
+        return (
+          `<div class="pair-row"><span class="pair-film" title="${esc(f.title)}"` +
+          `${gap !== null ? ` style="color: ${gapColor(gap)}"` : ""}>${esc(f.title)}</span>` +
+          `<span class="mono">${num(f.ra)}</span><span class="mono">${num(f.rb)}</span></div>`
+        );
+      })
+      .join("");
+    const more =
+      films.length > PAIR_LIST_MAX
+        ? `<p class="mono muted">+ ${films.length - PAIR_LIST_MAX} more</p>`
+        : "";
+
+    panel.innerHTML =
+      `<div class="pair-heads">${mini(a)}${mini(b)}</div>` +
+      `<h3 class="person-name pair-name">${esc(a.name.toLowerCase())} &amp; ${esc(b.name.toLowerCase())}</h3>` +
+      `<div class="row"><span class="mono">shared</span><span class="mono">${l.shared ?? 0}</span></div>` +
+      `<div class="row"><span class="mono">avg gap</span><span class="mono"${l.avgGap !== null && l.avgGap !== undefined ? ` style="color: ${gapColor(l.avgGap)}"` : ""}>${l.avgGap ?? "-"}</span></div>` +
+      (films.length
+        ? `<div class="pair-row cols"><span></span>${mini(a)}${mini(b)}</div>` + rows
+        : "") +
+      more;
+  }
+
+  // --- mode + view toggles ---------------------------------------------------
+
+  const btnFilms = document.getElementById("mode-films")!;
+  const btnPeople = document.getElementById("mode-people")!;
+  const viewToggle = document.getElementById("view-toggle")!;
   const btnShared = document.getElementById("view-shared")!;
   const btnAll = document.getElementById("view-all")!;
+
+  function reset() {
+    focused = null;
+    pinned = null;
+    hovered = null;
+    hoveredLink = null;
+    pinnedLink = null;
+    renderPanel(null);
+    build();
+  }
+
+  function setMode(m: "films" | "people") {
+    mode = m;
+    btnFilms.classList.toggle("active", m === "films");
+    btnPeople.classList.toggle("active", m === "people");
+    viewToggle.hidden = m === "people"; // shared/everything only means something with film nodes
+    reset();
+  }
+  btnFilms.addEventListener("click", () => setMode("films"));
+  btnPeople.addEventListener("click", () => setMode("people"));
+
   function setView(shared: boolean) {
     sharedOnly = shared;
     btnShared.classList.toggle("active", shared);
     btnAll.classList.toggle("active", !shared);
-    focused = null;
-    pinned = null;
-    renderPanel(null);
-    build();
+    reset();
   }
   btnShared.addEventListener("click", () => setView(true));
   btnAll.addEventListener("click", () => setView(false));
@@ -443,11 +644,17 @@ import Layout from "../layouts/Layout.astro";
     top: var(--space-2);
     left: var(--space-2);
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+  .controls .top {
+    display: flex;
     align-items: center;
     gap: var(--space-2);
   }
 
-  .view button {
+  .seg button {
     padding: 0.35rem 0.8rem;
     background: var(--paper);
     border: 1px solid var(--ink);
@@ -455,10 +662,10 @@ import Layout from "../layouts/Layout.astro";
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
-  .view button + button {
+  .seg button + button {
     border-left: none;
   }
-  .view button.active {
+  .seg button.active {
     background: var(--ink);
     color: var(--paper);
   }
@@ -517,6 +724,50 @@ import Layout from "../layouts/Layout.astro";
     font-family: var(--font-mono);
     font-size: 1.05rem;
     letter-spacing: 0.06em;
+  }
+  .panel :global(.pair-heads) {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    padding-top: 0.3rem;
+  }
+  .panel :global(.mini) {
+    width: 1.5rem;
+    height: 1.5rem;
+    object-fit: cover;
+    background: var(--faint);
+    border-radius: 50%; /* graph people are circles - their minis match */
+  }
+  .panel :global(.pair-heads .mini) {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .panel :global(.pair-name) {
+    text-align: center;
+  }
+  .panel :global(.pair-row) {
+    display: grid;
+    grid-template-columns: 1fr 2.4rem 2.4rem;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 0.35rem 0;
+  }
+  .panel :global(.pair-row .mono) {
+    text-align: center;
+  }
+  .panel :global(.pair-row.cols) {
+    padding-top: 0.7rem;
+  }
+  .panel :global(.pair-row.cols .mini) {
+    justify-self: center;
+  }
+  .panel :global(.pair-film) {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .panel :global(.poster) {
     width: 100%;
