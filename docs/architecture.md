@@ -12,8 +12,9 @@ bot is HTTP/cron only.
    `/untrack`, `/film`, `/film-key`, `/review`, `/review-key`, `/best`,
    `/worst`, `/favorite`, `/stats`, `/refresh`. (`/vs` was cut; its
    implementation lives in git history.)
-3. 🔨 **Web** — the node graph (the site's centerpiece) is built; films /
-   people / stats pages and a navigation concept are next. The
+3. 🔨 **Web** — the node graph (the site's centerpiece, with films and people
+   views) and the catalog (poster wall + search + film cards) are built;
+   people / stats pages and a real navigation concept are next. The
    work-in-progress site deploys to the workers.dev URL alongside the bot;
    `moobie.awln.dev` stays unpointed until it's called ready.
 

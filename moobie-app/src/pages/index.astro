@@ -9,6 +9,7 @@ import Layout from "../layouts/Layout.astro";
   <section class="board" id="board">
     <canvas id="graph"></canvas>
     <div class="controls">
+      <a class="seg-link" href="/catalog">catalog →</a>
       <div class="top">
         <div class="seg mono" role="group" aria-label="Graph">
           <button id="mode-films" class="active">films</button>
@@ -37,26 +38,8 @@ import Layout from "../layouts/Layout.astro";
     forceY,
   } from "d3-force";
 
-  interface Rater {
-    username: string;
-    rating: number | null;
-    liked: number;
-  }
-  interface Film {
-    key: string;
-    title: string;
-    year: number | null;
-    posterUrl: string | null;
-    average: number | null;
-    spread: number | null;
-    disagreement: boolean;
-    raters: Rater[];
-  }
-  interface Person {
-    username: string;
-    name: string;
-    avatarUrl: string | null;
-  }
+  import { esc, num, gapClass, filmCardHtml, type Film, type Person } from "../lib/cards";
+
   interface Payload {
     people: Person[];
     films: Film[];
@@ -116,28 +99,6 @@ import Layout from "../layouts/Layout.astro";
 
   const bucket = (rating: number | null) =>
     rating === null ? tokens.faint : rating <= 2 ? tokens.low : rating >= 4 ? tokens.high : tokens.mid;
-
-  const esc = (s: string) =>
-    s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-
-  // Letterboxd-style rating icons (user-made SVGs, inlined as currentColor).
-  const STAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.9121 1.59053C12.7508 1.2312 12.3936 1 11.9997 1C11.6059 1 11.2487 1.2312 11.0874 1.59053L8.27041 7.86702L1.43062 8.60661C1.03903 8.64895 0.708778 8.91721 0.587066 9.2918C0.465355 9.66639 0.574861 10.0775 0.866772 10.342L5.96556 14.9606L4.55534 21.6942C4.4746 22.0797 4.62768 22.4767 4.94632 22.7082C5.26497 22.9397 5.68983 22.9626 6.03151 22.7667L11.9997 19.3447L17.968 22.7667C18.3097 22.9626 18.7345 22.9397 19.0532 22.7082C19.3718 22.4767 19.5249 22.0797 19.4441 21.6942L18.0339 14.9606L23.1327 10.342C23.4246 10.0775 23.5341 9.66639 23.4124 9.2918C23.2907 8.91721 22.9605 8.64895 22.5689 8.60661L15.7291 7.86702L12.9121 1.59053Z" fill="currentColor"/></svg>`;
-  // Cropped viewBox: the half-star path only covers x 0–12, so the icon takes
-  // half a star's width instead of reserving a full star cell with a dead gap.
-  const HALF_STAR_SVG = `<svg class="half" viewBox="0 0 12 24" aria-hidden="true"><path d="M11.9997 1C11.6059 1 11.2487 1.2312 11.0874 1.59053L8.27041 7.86702L1.43062 8.60661C1.03903 8.64895 0.708778 8.91721 0.587066 9.2918C0.465355 9.66639 0.574861 10.0775 0.866772 10.342L5.96556 14.9606L4.55534 21.6942C4.4746 22.0797 4.62768 22.4767 4.94632 22.7082C5.26497 22.9397 5.68983 22.9626 6.03151 22.7667L11.9997 19.3447V1Z" fill="currentColor"/></svg>`;
-  const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9.1371C2 14 6.01943 16.5914 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371Z" fill="currentColor"/></svg>`;
-
-  /** One rating, Letterboxd-style: green stars and an orange heart. */
-  const ratingHtml = (rating: number | null, liked: number) => {
-    const stars =
-      rating === null
-        ? `<span class="mono muted">unrated</span>`
-        : `<span class="stars" aria-label="${rating} stars">` +
-          STAR_SVG.repeat(Math.floor(rating)) +
-          (rating % 1 ? HALF_STAR_SVG : "") +
-          `</span>`;
-    return `<span class="rating">${stars}${liked ? `<span class="heart">${HEART_SVG}</span>` : ""}</span>`;
-  };
 
   // --- state ---------------------------------------------------------------
 
@@ -481,30 +442,7 @@ import Layout from "../layouts/Layout.astro";
       return;
     }
     if (n.kind === "film") {
-      const f = n.film!;
-      const rows = f.raters
-        .map(
-          (r) =>
-            `<div class="row"><span class="mono">${esc(name(r.username))}</span>` +
-            ratingHtml(r.rating, r.liked) +
-            `</div>`,
-        )
-        .join("");
-      const rated = f.raters.filter((r) => r.rating !== null).length;
-      const avg =
-        f.average !== null && rated > 1
-          ? `<div class="row"><span class="mono">avg</span><span class="mono">${f.average}</span></div>`
-          : "";
-      const gap =
-        f.spread !== null
-          ? `<div class="row"><span class="mono">gap</span><span class="mono"${f.disagreement ? ` style="color: ${tokens.beef}"` : ""}>${f.spread}</span></div>`
-          : "";
-      panel.innerHTML =
-        (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +
-        `<h3 class="display">${esc(f.title)}${f.year ? ` <span class="muted">(${f.year})</span>` : ""}</h3>` +
-        rows +
-        avg +
-        gap;
+      panel.innerHTML = filmCardHtml(n.film!, name);
       return;
     }
     const p = n.person!;
@@ -547,14 +485,11 @@ import Layout from "../layouts/Layout.astro";
 
     const rows = films
       .slice(0, PAIR_LIST_MAX)
-      .map((f) => {
-        const gap = pairGap(f);
-        return (
-          `<div class="pair-row"><span class="pair-film" title="${esc(f.title)}"` +
-          `${gap !== null ? ` style="color: ${gapColor(gap)}"` : ""}>${esc(f.title)}</span>` +
-          `<span class="mono">${num(f.ra)}</span><span class="mono">${num(f.rb)}</span></div>`
-        );
-      })
+      .map(
+        (f) =>
+          `<div class="pair-row"><span class="pair-film ${gapClass(pairGap(f))}" title="${esc(f.title)}">${esc(f.title)}</span>` +
+          `<span class="mono">${num(f.ra)}</span><span class="mono">${num(f.rb)}</span></div>`,
+      )
       .join("");
     const more =
       films.length > PAIR_LIST_MAX
@@ -565,7 +500,7 @@ import Layout from "../layouts/Layout.astro";
       `<div class="pair-heads">${mini(a)}${mini(b)}</div>` +
       `<h3 class="person-name pair-name">${esc(a.name.toLowerCase())} &amp; ${esc(b.name.toLowerCase())}</h3>` +
       `<div class="row"><span class="mono">shared</span><span class="mono">${l.shared ?? 0}</span></div>` +
-      `<div class="row"><span class="mono">avg gap</span><span class="mono"${l.avgGap !== null && l.avgGap !== undefined ? ` style="color: ${gapColor(l.avgGap)}"` : ""}>${l.avgGap ?? "-"}</span></div>` +
+      `<div class="row"><span class="mono">avg gap</span><span class="mono ${gapClass(l.avgGap ?? null)}">${l.avgGap ?? "-"}</span></div>` +
       (films.length
         ? `<div class="pair-row cols"><span></span>${mini(a)}${mini(b)}</div>` + rows
         : "") +
@@ -654,22 +589,6 @@ import Layout from "../layouts/Layout.astro";
     gap: var(--space-2);
   }
 
-  .seg button {
-    padding: 0.35rem 0.8rem;
-    background: var(--paper);
-    border: 1px solid var(--ink);
-    font-size: 0.62rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-  .seg button + button {
-    border-left: none;
-  }
-  .seg button.active {
-    background: var(--ink);
-    color: var(--paper);
-  }
-
   /* Theme switch: an empty square in light, a filled one in dark. */
   .theme {
     width: 1.5rem;
@@ -708,102 +627,8 @@ import Layout from "../layouts/Layout.astro";
     position: absolute;
     top: var(--space-2);
     right: var(--space-2);
-    width: 16rem;
     max-height: calc(100% - 2 * var(--space-2));
     overflow-y: auto;
-    padding: var(--space-2);
-    background: var(--paper);
-    border: var(--rule);
-  }
-  .panel :global(h3) {
-    font-size: 1.5rem;
-    margin: 0.4rem 0 0.8rem;
-    font-weight: 400;
-  }
-  .panel :global(.person-name) {
-    font-family: var(--font-mono);
-    font-size: 1.05rem;
-    letter-spacing: 0.06em;
-  }
-  .panel :global(.pair-heads) {
-    display: flex;
-    justify-content: center;
-    gap: 0.6rem;
-    padding-top: 0.3rem;
-  }
-  .panel :global(.mini) {
-    width: 1.5rem;
-    height: 1.5rem;
-    object-fit: cover;
-    background: var(--faint);
-    border-radius: 50%; /* graph people are circles - their minis match */
-  }
-  .panel :global(.pair-heads .mini) {
-    width: 2.75rem;
-    height: 2.75rem;
-  }
-  .panel :global(.pair-name) {
-    text-align: center;
-  }
-  .panel :global(.pair-row) {
-    display: grid;
-    grid-template-columns: 1fr 2.4rem 2.4rem;
-    gap: 0.4rem;
-    align-items: center;
-    padding: 0.35rem 0;
-  }
-  .panel :global(.pair-row .mono) {
-    text-align: center;
-  }
-  .panel :global(.pair-row.cols) {
-    padding-top: 0.7rem;
-  }
-  .panel :global(.pair-row.cols .mini) {
-    justify-self: center;
-  }
-  .panel :global(.pair-film) {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 0.95rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .panel :global(.poster) {
-    width: 100%;
-  }
-  .panel :global(.row) {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 0.4rem 0;
-  }
-  .panel :global(.rating) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .panel :global(.stars) {
-    display: inline-flex;
-    align-items: center;
-    gap: 1px;
-    color: var(--star);
-  }
-  .panel :global(.stars svg) {
-    width: 1.1rem;
-    height: 1.1rem;
-  }
-  .panel :global(.stars svg.half) {
-    width: 0.55rem;
-  }
-  .panel :global(.heart) {
-    display: inline-flex;
-    color: var(--heart);
-  }
-  .panel :global(.heart svg) {
-    width: 1rem;
-    height: 1rem;
   }
   .hint {
     position: absolute;

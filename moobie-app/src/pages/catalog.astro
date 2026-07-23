@@ -1,0 +1,164 @@
+---
+// The catalog — every film anyone in the pool has logged, as a poster wall.
+// Search filters as you type; clicking a poster opens the same film card the
+// graph shows: who rated it, avg, gap.
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="moobie catalog">
+  <section class="page">
+    <header class="bar">
+      <a class="seg-link" href="/">← graph</a>
+      <input id="search" class="search mono" type="search" placeholder="search films" autocomplete="off" spellcheck="false" />
+      <span id="count" class="mono muted"></span>
+    </header>
+    <div class="grid" id="grid"></div>
+    <aside class="panel" id="panel" aria-live="polite" hidden></aside>
+  </section>
+</Layout>
+
+<script>
+  import { esc, filmCardHtml, type Film, type Person } from "../lib/cards";
+
+  const grid = document.getElementById("grid")!;
+  const panel = document.getElementById("panel")!;
+  const search = document.getElementById("search") as HTMLInputElement;
+  const count = document.getElementById("count")!;
+
+  let films: Film[] = [];
+  let people: Person[] = [];
+  const name = (username: string) =>
+    people.find((p) => p.username === username)?.name ?? username;
+
+  // Same forgiving search as the bot's /film: case, punctuation, spacing.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+  function tile(f: Film): string {
+    const art = f.posterUrl
+      ? `<img src="${esc(f.posterUrl)}" alt="${esc(f.title)}" loading="lazy" decoding="async" />`
+      : `<span class="no-poster display">${esc(f.title)}</span>`;
+    return `<button class="tile" data-key="${esc(f.key)}" title="${esc(f.title)}">${art}</button>`;
+  }
+
+  function render(list: Film[]) {
+    grid.innerHTML = list.map(tile).join("");
+    count.textContent = `${list.length} film${list.length === 1 ? "" : "s"}`;
+  }
+
+  search.addEventListener("input", () => {
+    const q = norm(search.value);
+    render(q ? films.filter((f) => norm(f.title).includes(q)) : films);
+  });
+
+  // One listener for the whole wall: open the clicked film's card.
+  grid.addEventListener("click", (e) => {
+    const t = (e.target as Element).closest(".tile") as HTMLElement | null;
+    if (!t) return;
+    const film = films.find((f) => f.key === t.dataset.key);
+    if (!film) return;
+    panel.innerHTML = filmCardHtml(film, name);
+    panel.hidden = false;
+  });
+
+  // Click anywhere else (or Escape) to put the card away.
+  document.addEventListener("click", (e) => {
+    if (!(e.target as Element).closest(".tile, .panel")) panel.hidden = true;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") panel.hidden = true;
+  });
+
+  const res = await fetch("/api/graph");
+  const data = (await res.json()) as { people: Person[]; films: Film[] };
+  people = data.people;
+  films = data.films; // payload order is newest watch first
+  render(films);
+</script>
+
+<style>
+  .page {
+    min-height: 100dvh;
+  }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--paper);
+  }
+
+  .search {
+    flex: 1;
+    max-width: 18rem;
+    padding: 0.35rem 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--ink);
+    color: var(--ink);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    outline: none;
+  }
+  .search::placeholder {
+    color: var(--muted);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 2px;
+    padding: 2px;
+  }
+  .grid :global(.tile) {
+    aspect-ratio: 2 / 3;
+    padding: 0;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    cursor: pointer;
+  }
+  .grid :global(.tile img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .grid :global(.tile:hover) {
+    outline: 1px solid var(--ink);
+    outline-offset: -1px;
+  }
+  .grid :global(.no-poster) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: var(--space-1);
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  .panel {
+    position: fixed;
+    top: var(--space-2);
+    right: var(--space-2);
+    z-index: 20;
+    max-height: calc(100dvh - 2 * var(--space-2));
+    overflow-y: auto;
+  }
+
+  @media (max-width: 720px) {
+    .panel {
+      top: auto;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      width: auto;
+      max-height: 60vh;
+      border: none;
+      border-top: var(--rule);
+    }
+  }
+</style>

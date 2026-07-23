@@ -144,3 +144,140 @@ img {
   letter-spacing: -0.01em;
   line-height: 1.05;
 }
+
+/* Data-color helpers — text that deliberately wears a rating color. */
+.c-low {
+  color: var(--low);
+}
+.c-mid {
+  color: var(--mid);
+}
+.c-high {
+  color: var(--high);
+}
+.c-beef {
+  color: var(--beef);
+}
+
+/* Segmented controls and control-corner links. */
+.seg {
+  display: flex;
+}
+.seg button,
+.seg-link {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.seg button + button {
+  border-left: none;
+}
+.seg button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* --- cards (the .panel) — shared by the graph panel and the catalog -------- */
+
+.panel {
+  width: 16rem;
+  padding: var(--space-2);
+  background: var(--paper);
+  border: var(--rule);
+}
+.panel h3 {
+  font-size: 1.5rem;
+  margin: 0.4rem 0 0.8rem;
+  font-weight: 400;
+}
+.panel .person-name {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+}
+.panel .pair-name {
+  text-align: center;
+}
+.panel .pair-heads {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  padding-top: 0.3rem;
+}
+.panel .mini {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: cover;
+  background: var(--faint);
+  border-radius: 50%; /* graph people are circles - their minis match */
+}
+.panel .pair-heads .mini {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+.panel .pair-row {
+  display: grid;
+  grid-template-columns: 1fr 2.4rem 2.4rem;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.35rem 0;
+}
+.panel .pair-row .mono {
+  text-align: center;
+}
+.panel .pair-row.cols {
+  padding-top: 0.7rem;
+}
+.panel .pair-row.cols .mini {
+  justify-self: center;
+}
+.panel .pair-film {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel .poster {
+  width: 100%;
+}
+.panel .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.4rem 0;
+}
+.panel .rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel .stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--star);
+}
+.panel .stars svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.panel .stars svg.half {
+  width: 0.55rem;
+}
+.panel .heart {
+  display: inline-flex;
+  color: var(--heart);
+}
+.panel .heart svg {
+  width: 1rem;
+  height: 1rem;
+}
