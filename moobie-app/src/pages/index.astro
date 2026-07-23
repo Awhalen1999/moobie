@@ -6,29 +6,17 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="moobie — the graph">
-  <section class="stage">
+  <section class="board" id="board">
+    <canvas id="graph"></canvas>
     <div class="controls">
-      <div class="legend mono muted">
-        <span><i class="swatch" style="background: var(--high)"></i> ≥ 4</span>
-        <span><i class="swatch" style="background: var(--mid)"></i> 2.5 – 3.5</span>
-        <span><i class="swatch" style="background: var(--low)"></i> ≤ 2</span>
-        <span><i class="swatch dashed"></i> unrated</span>
-        <span><i class="swatch" style="border: 2px solid var(--beef); border-radius: 50%"></i> ≥ 3 apart</span>
+      <div class="view mono" role="group" aria-label="View">
+        <button id="view-shared" class="active">shared</button>
+        <button id="view-all">everything</button>
       </div>
-      <div class="strip-right">
-        <div class="view mono" role="group" aria-label="View">
-          <button id="view-shared" class="active">shared</button>
-          <button id="view-all">everything</button>
-        </div>
-        <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
-      </div>
+      <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
     </div>
-
-    <div class="board" id="board">
-      <canvas id="graph"></canvas>
-      <aside class="panel" id="panel" aria-live="polite" hidden></aside>
-      <p class="hint mono muted" id="tally">&nbsp;</p>
-    </div>
+    <aside class="panel" id="panel" aria-live="polite" hidden></aside>
+    <p class="hint mono muted" id="tally">&nbsp;</p>
   </section>
 </Layout>
 
@@ -444,35 +432,11 @@ import Layout from "../layouts/Layout.astro";
 </script>
 
 <style>
-  /* The page is the graph: a controls strip, then the map fills the viewport. */
-  .stage {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-  }
-
+  /* The page is the graph; the few controls float over its top-left corner. */
   .controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-    padding: var(--space-1) var(--space-2);
-    border-bottom: var(--hairline);
-  }
-  .legend {
-    display: flex;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-  .legend .dashed {
-    border-top: 1px dashed var(--muted);
-    height: 0;
-    width: 0.8rem;
-    vertical-align: 0.15em;
-  }
-
-  .strip-right {
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -480,6 +444,7 @@ import Layout from "../layouts/Layout.astro";
 
   .view button {
     padding: 0.35rem 0.8rem;
+    background: var(--paper);
     border: 1px solid var(--ink);
     font-size: 0.62rem;
     letter-spacing: 0.14em;
@@ -513,8 +478,7 @@ import Layout from "../layouts/Layout.astro";
 
   .board {
     position: relative;
-    flex: 1;
-    min-height: 0;
+    height: 100dvh;
   }
   #graph {
     display: block;
@@ -545,7 +509,6 @@ import Layout from "../layouts/Layout.astro";
   }
   .panel :global(.poster) {
     width: 100%;
-    border: var(--hairline);
   }
   .panel :global(.row) {
     display: flex;
@@ -595,7 +558,7 @@ import Layout from "../layouts/Layout.astro";
   }
 
   @media (max-width: 720px) {
-    .stage {
+    .board {
       height: auto;
     }
     #graph {

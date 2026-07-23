@@ -144,11 +144,3 @@ img {
   letter-spacing: -0.01em;
   line-height: 1.05;
 }
-
-.swatch {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  vertical-align: -0.05em;
-  border: 1px solid transparent;
-}
