@@ -13,7 +13,14 @@ import Layout from "../layouts/Layout.astro";
         <a class="seg-link" href="/">← graph</a>
       </div>
       <input id="search" class="search mono" type="search" placeholder="search films" autocomplete="off" spellcheck="false" />
-      <span id="count" class="mono muted"></span>
+      <select id="sort" class="sort mono" aria-label="Sort films">
+        <option value="new">newest</option>
+        <option value="az">a–z</option>
+        <option value="avg-high">avg: high → low</option>
+        <option value="avg-low">avg: low → high</option>
+        <option value="most">most logged</option>
+        <option value="gap">biggest gap</option>
+      </select>
     </header>
     <div class="grid" id="grid"></div>
     <aside class="panel" id="panel" aria-live="polite" hidden></aside>
@@ -26,11 +33,10 @@ import Layout from "../layouts/Layout.astro";
   const grid = document.getElementById("grid")!;
   const panel = document.getElementById("panel")!;
   const search = document.getElementById("search") as HTMLInputElement;
-  const count = document.getElementById("count")!;
+  const sort = document.getElementById("sort") as HTMLSelectElement;
 
   let films: Film[] = [];
   let people: Person[] = [];
-  let tally = "";
   const name = (username: string) =>
     people.find((p) => p.username === username)?.name ?? username;
 
@@ -46,14 +52,29 @@ import Layout from "../layouts/Layout.astro";
 
   function render(list: Film[]) {
     grid.innerHTML = list.map(tile).join("");
-    count.textContent =
-      list.length === films.length ? tally : `${list.length} film${list.length === 1 ? "" : "s"}`;
   }
 
-  search.addEventListener("input", () => {
+  // Unrated films sink on the avg sorts; solo films sink on gap (their gap is 0 anyway).
+  const gap = (f: Film) => (f.raters.length > 1 ? (f.spread ?? 0) : -1);
+  const sorters: Record<string, (a: Film, b: Film) => number> = {
+    az: (a, b) => a.title.localeCompare(b.title),
+    "avg-high": (a, b) => (b.average ?? -1) - (a.average ?? -1),
+    "avg-low": (a, b) => (a.average ?? 99) - (b.average ?? 99),
+    most: (a, b) => b.raters.length - a.raters.length,
+    gap: (a, b) => gap(b) - gap(a),
+  };
+
+  /** Current search filter + sort applied; "new" keeps payload order. */
+  function view(): Film[] {
     const q = norm(search.value);
-    render(q ? films.filter((f) => norm(f.title).includes(q)) : films);
-  });
+    const list = q ? films.filter((f) => norm(f.title).includes(q)) : [...films];
+    const cmp = sorters[sort.value];
+    if (cmp) list.sort((a, b) => cmp(a, b) || a.title.localeCompare(b.title)); // ties break a–z
+    return list;
+  }
+
+  search.addEventListener("input", () => render(view()));
+  sort.addEventListener("change", () => render(view()));
 
   // One listener for the whole wall: open the clicked film's card.
   grid.addEventListener("click", (e) => {
@@ -74,11 +95,9 @@ import Layout from "../layouts/Layout.astro";
   });
 
   const res = await fetch("/api/graph");
-  const data = (await res.json()) as { people: Person[]; films: Film[]; logs: number };
+  const data = (await res.json()) as { people: Person[]; films: Film[] };
   people = data.people;
   films = data.films; // payload order is newest watch first
-  const shared = films.filter((f) => f.raters.length > 1).length;
-  tally = `${people.length} people · ${films.length} films (${shared} shared) · ${data.logs} logs`;
   render(films);
 </script>
 
@@ -115,15 +134,53 @@ import Layout from "../layouts/Layout.astro";
     color: var(--muted);
   }
 
-  /* Sit the tally on the search field's baseline, not the bar's middle. */
-  #count {
-    align-self: flex-end;
-    padding-bottom: calc(0.35rem + 1px);
+  .sort {
+    min-width: 14rem;
+    padding: 0.35rem 1.5rem 0.35rem 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--ink);
+    color: var(--ink);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Customizable select: the picker anchors below the control instead of the
+     macOS mid-overlay. Browsers without base-select keep the native picker. */
+  .sort,
+  .sort::picker(select) {
+    appearance: base-select;
+  }
+  .sort::picker(select) {
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    padding: 0;
+  }
+  .sort option {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .sort option:hover,
+  .sort option:focus {
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  .sort option:checked {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .sort option::checkmark {
+    display: none;
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
     gap: 2px;
     padding: 2px;
   }
