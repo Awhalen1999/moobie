@@ -9,13 +9,13 @@ import Layout from "../layouts/Layout.astro";
   <section class="board" id="board">
     <canvas id="graph"></canvas>
     <div class="controls">
-      <a class="seg-link" href="/catalog">catalog →</a>
-      <div class="top">
-        <div class="seg mono" role="group" aria-label="Graph">
-          <button id="mode-films" class="active">films</button>
-          <button id="mode-people">people</button>
-        </div>
-        <button class="theme" id="theme" aria-label="Switch theme" title="Switch theme"></button>
+      <div class="seg mono">
+        <button class="theme" aria-label="Switch theme" title="Switch theme"></button>
+        <a class="seg-link" href="/catalog">catalog →</a>
+      </div>
+      <div class="seg mono" role="group" aria-label="Graph">
+        <button id="mode-films" class="active">films</button>
+        <button id="mode-people">people</button>
       </div>
       <div class="seg mono" role="group" aria-label="View" id="view-toggle">
         <button id="view-shared" class="active">shared</button>
@@ -558,12 +558,6 @@ import Layout from "../layouts/Layout.astro";
   btnShared.addEventListener("click", () => setView(true));
   btnAll.addEventListener("click", () => setView(false));
 
-  document.getElementById("theme")!.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("moobie-theme", next);
-  });
-
   // --- boot ----------------------------------------------------------------
 
   const res = await fetch("/api/graph");
@@ -597,30 +591,6 @@ import Layout from "../layouts/Layout.astro";
     align-items: flex-start;
     gap: var(--space-1);
   }
-  .controls .top {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  /* Theme switch: an empty square in light, a filled one in dark. */
-  .theme {
-    width: 1.5rem;
-    height: 1.5rem;
-    display: grid;
-    place-items: center;
-  }
-  .theme::before {
-    content: "";
-    width: 0.7rem;
-    height: 0.7rem;
-    border: 1px solid var(--ink);
-    transition: background 0.2s ease;
-  }
-  :global([data-theme="dark"]) .theme::before {
-    background: var(--ink);
-  }
-
   .board {
     position: relative;
     height: 100dvh;

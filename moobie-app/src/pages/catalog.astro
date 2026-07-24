@@ -8,7 +8,10 @@ import Layout from "../layouts/Layout.astro";
 <Layout>
   <section class="page">
     <header class="bar">
-      <a class="seg-link" href="/">← graph</a>
+      <div class="seg mono">
+        <button class="theme" aria-label="Switch theme" title="Switch theme"></button>
+        <a class="seg-link" href="/">← graph</a>
+      </div>
       <input id="search" class="search mono" type="search" placeholder="search films" autocomplete="off" spellcheck="false" />
       <span id="count" class="mono muted"></span>
     </header>

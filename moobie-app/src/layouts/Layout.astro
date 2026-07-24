@@ -28,5 +28,14 @@ const { title = "moobie" } = Astro.props;
     <main>
       <slot />
     </main>
+    <script is:inline>
+      // Every page renders its own .theme button; one delegated handler flips them all.
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".theme")) return;
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("moobie-theme", next);
+      });
+    </script>
   </body>
 </html>
