@@ -167,8 +167,20 @@ import Layout from "../layouts/Layout.astro";
     for (const n of nodes) if (n.x !== undefined) kept.set(n.id, { x: n.x, y: n.y! });
 
     if (mode === "people") {
-      nodes = data.people.map<Node>((p) => ({ id: `u:${p.username}`, kind: "person", r: 22, person: p }));
       links = peopleLinks();
+      // Avatar size tracks total shared films, so the hubs read as hubs.
+      const totals = new Map<string, number>();
+      for (const l of links) {
+        totals.set(l.source as string, (totals.get(l.source as string) ?? 0) + (l.shared ?? 0));
+        totals.set(l.target as string, (totals.get(l.target as string) ?? 0) + (l.shared ?? 0));
+      }
+      const most = Math.max(1, ...totals.values());
+      nodes = data.people.map<Node>((p) => ({
+        id: `u:${p.username}`,
+        kind: "person",
+        r: 16 + Math.round(((totals.get(`u:${p.username}`) ?? 0) / most) * 14),
+        person: p,
+      }));
     } else {
       const films = data.films.filter((f) => !sharedOnly || f.raters.length >= 2);
       nodes = [
@@ -451,11 +463,13 @@ import Layout from "../layouts/Layout.astro";
       .map((f) => f.raters.find((r) => r.username === p.username)!.rating)
       .filter((r): r is number => r !== null);
     const liked = mine.filter((f) => f.raters.some((r) => r.username === p.username && r.liked)).length;
+    const shared = mine.filter((f) => f.raters.length >= 2).length;
     const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100 : null;
     panel.innerHTML =
       (p.avatarUrl ? `<img class="poster" src="${esc(p.avatarUrl)}" alt="" loading="lazy" />` : "") +
       `<h3 class="person-name">${esc(p.name.toLowerCase())}</h3>` +
       `<div class="row"><span class="mono">films</span><span class="mono">${mine.length}</span></div>` +
+      `<div class="row"><span class="mono">shared</span><span class="mono">${shared}</span></div>` +
       `<div class="row"><span class="mono">avg</span><span class="mono">${avg ?? "-"}</span></div>` +
       `<div class="row"><span class="mono">liked</span><span class="mono">${liked}</span></div>`;
   }

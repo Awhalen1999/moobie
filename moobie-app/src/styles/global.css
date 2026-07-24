@@ -163,6 +163,9 @@ img {
 .seg {
   display: flex;
 }
+.seg[hidden] {
+  display: none; /* display: flex above would otherwise defeat the hidden attribute */
+}
 .seg button,
 .seg-link {
   display: inline-block;

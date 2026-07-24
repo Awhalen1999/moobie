@@ -5,7 +5,7 @@
 import Layout from "../layouts/Layout.astro";
 ---
 
-<Layout title="moobie catalog">
+<Layout>
   <section class="page">
     <header class="bar">
       <a class="seg-link" href="/">← graph</a>
@@ -27,6 +27,7 @@ import Layout from "../layouts/Layout.astro";
 
   let films: Film[] = [];
   let people: Person[] = [];
+  let tally = "";
   const name = (username: string) =>
     people.find((p) => p.username === username)?.name ?? username;
 
@@ -42,7 +43,8 @@ import Layout from "../layouts/Layout.astro";
 
   function render(list: Film[]) {
     grid.innerHTML = list.map(tile).join("");
-    count.textContent = `${list.length} film${list.length === 1 ? "" : "s"}`;
+    count.textContent =
+      list.length === films.length ? tally : `${list.length} film${list.length === 1 ? "" : "s"}`;
   }
 
   search.addEventListener("input", () => {
@@ -69,9 +71,11 @@ import Layout from "../layouts/Layout.astro";
   });
 
   const res = await fetch("/api/graph");
-  const data = (await res.json()) as { people: Person[]; films: Film[] };
+  const data = (await res.json()) as { people: Person[]; films: Film[]; logs: number };
   people = data.people;
   films = data.films; // payload order is newest watch first
+  const shared = films.filter((f) => f.raters.length > 1).length;
+  tally = `${people.length} people · ${films.length} films (${shared} shared) · ${data.logs} logs`;
   render(films);
 </script>
 
@@ -106,6 +110,12 @@ import Layout from "../layouts/Layout.astro";
   }
   .search::placeholder {
     color: var(--muted);
+  }
+
+  /* Sit the tally on the search field's baseline, not the bar's middle. */
+  #count {
+    align-self: flex-end;
+    padding-bottom: calc(0.35rem + 1px);
   }
 
   .grid {
