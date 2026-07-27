@@ -8,8 +8,8 @@ trying too hard. Reference vibes: gtheimagineers.com, levonaronian.com.
 ## Surfaces
 
 Two themes from one token set — `[data-theme]` is stamped on `<html>` before
-first paint (stored choice, else system). The toggle is a small square:
-outlined in light, filled in dark.
+first paint (stored choice, else system). The toggle is a small solid ink
+block.
 
 | token | light | dark |
 |---|---|---|
@@ -69,7 +69,7 @@ color. Identity is never color-alone: every colored mark has a legend entry.
 
 **Displayed ratings look like Letterboxd**: green SVG stars (+ a half-width
 half star) and an orange heart, inlined as `currentColor` paths in
-`index.astro`. The diverging buckets color the graph itself — edges by each
+`lib/cards.ts`. The diverging buckets color the graph itself — edges by each
 rating, solo film dots by their one rating, shared film dots green
 (agreement) or `--disagreed` orange (gap ≥ 3), the same green/orange call the
 Discord cards make. Panels show ratings in brand colors.

@@ -215,6 +215,32 @@ img {
   background: var(--paper);
   border: var(--rule);
 }
+/* Floating close on film cards: sticky in the panel's top-right corner, so it
+   hovers in place while the card scrolls under it. The negative bottom margin
+   takes it out of the flow — the poster starts at the top as before. */
+.panel .card-x {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0 0 -2rem auto;
+  color: var(--muted);
+  transition: color 150ms ease, transform 150ms ease;
+}
+.panel .card-x svg {
+  width: 1rem;
+  height: 1rem;
+  /* Paper glow keeps the bare mark readable over any poster art. */
+  filter: drop-shadow(0 0 4px var(--paper));
+}
+.panel .card-x:hover {
+  color: var(--ink);
+  transform: scale(1.15);
+}
+
 .panel h3 {
   font-size: 1.5rem;
   margin: 0.4rem 0 0.8rem;

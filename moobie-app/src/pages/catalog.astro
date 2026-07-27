@@ -13,7 +13,7 @@ import Layout from "../layouts/Layout.astro";
         <a class="seg-link" href="/">← graph</a>
       </div>
       <input id="search" class="search mono" type="search" placeholder="search films" autocomplete="off" spellcheck="false" />
-      <select id="sort" class="sort mono" aria-label="Sort films">
+      <select id="sort" class="select mono" aria-label="Sort films">
         <option value="new">newest</option>
         <option value="az">a–z</option>
         <option value="avg-high">avg: high → low</option>
@@ -21,7 +21,7 @@ import Layout from "../layouts/Layout.astro";
         <option value="most">most logged</option>
         <option value="gap">biggest gap</option>
       </select>
-      <select id="who" class="sort mono" aria-label="Filter by person">
+      <select id="who" class="select mono" aria-label="Filter by person">
         <option value="">everyone</option>
       </select>
       <label class="check mono">
@@ -106,6 +106,10 @@ import Layout from "../layouts/Layout.astro";
     panel.hidden = false;
   });
 
+  panel.addEventListener("click", (e) => {
+    if ((e.target as Element).closest(".card-x")) panel.hidden = true;
+  });
+
   // Click anywhere else (or Escape) to put the card away.
   document.addEventListener("click", (e) => {
     if (!(e.target as Element).closest(".tile, .panel")) panel.hidden = true;
@@ -136,12 +140,14 @@ import Layout from "../layouts/Layout.astro";
     top: 0;
     z-index: 10;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-2);
     padding: var(--space-2);
     background: var(--paper);
   }
 
+  /* The bar's controls speak the site's one label voice: .mono (global.css). */
   .search {
     flex: 1;
     max-width: 18rem;
@@ -150,56 +156,50 @@ import Layout from "../layouts/Layout.astro";
     border: none;
     border-bottom: 1px solid var(--ink);
     color: var(--ink);
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
     outline: none;
   }
   .search::placeholder {
     color: var(--muted);
   }
 
-  .sort {
+  .select {
     min-width: 14rem;
     padding: 0.35rem 1.5rem 0.35rem 0;
     background: none;
     border: none;
     border-bottom: 1px solid var(--ink);
     color: var(--ink);
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
     outline: none;
     cursor: pointer;
   }
 
   /* Customizable select: the picker anchors below the control instead of the
      macOS mid-overlay. Browsers without base-select keep the native picker. */
-  .sort,
-  .sort::picker(select) {
+  .select,
+  .select::picker(select) {
     appearance: base-select;
   }
-  .sort::picker(select) {
+  .select::picker(select) {
     background: var(--paper);
     border: 1px solid var(--ink);
     padding: 0;
   }
-  .sort option {
+  .select option {
     padding: 0.4rem 0.8rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
   }
-  .sort option:hover,
-  .sort option:focus {
+  .select option:hover,
+  .select option:focus {
     background: color-mix(in srgb, var(--ink) 10%, transparent);
   }
-  .sort option:checked {
+  .select option:checked {
     background: var(--ink);
     color: var(--paper);
   }
-  .sort option::checkmark {
+  .select option::checkmark {
     display: none;
   }
 
@@ -209,9 +209,6 @@ import Layout from "../layouts/Layout.astro";
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
     white-space: nowrap;
     cursor: pointer;
   }
@@ -277,6 +274,19 @@ import Layout from "../layouts/Layout.astro";
   }
 
   @media (max-width: 720px) {
+    /* Search takes its own row, the dropdowns split the next, and the wide
+       basis pushes the checkboxes down to their own. */
+    .search {
+      flex: 1 1 100%;
+      max-width: none;
+    }
+    .select {
+      flex: 1 1 40%;
+      min-width: 0;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    }
     .panel {
       top: auto;
       right: 0;

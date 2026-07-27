@@ -242,6 +242,37 @@ import Layout from "../layouts/Layout.astro";
   }
   new ResizeObserver(resize).observe(board);
 
+  // Auto-fit: when the blob outgrows the viewport, the whole map shrinks to
+  // fit — never clipped, never scaled up past 1:1.
+  const FIT_PAD = 28;
+  let view = { scale: 1, cx: 0, cy: 0 };
+  function fitView() {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      if (n.x === undefined) continue;
+      minX = Math.min(minX, n.x - n.r);
+      maxX = Math.max(maxX, n.x + n.r);
+      minY = Math.min(minY, n.y! - n.r);
+      maxY = Math.max(maxY, n.y! + n.r);
+    }
+    if (minX === Infinity) {
+      view = { scale: 1, cx: 0, cy: 0 };
+      return;
+    }
+    view = {
+      scale: Math.min(
+        1,
+        Math.max(1, width - 2 * FIT_PAD) / (maxX - minX),
+        Math.max(1, height - 2 * FIT_PAD) / (maxY - minY),
+      ),
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+    };
+  }
+
   const touches = (l: Link, n: Node) => l.source === n || l.target === n;
 
   const inFocus = (n: Node): boolean => {
@@ -252,9 +283,12 @@ import Layout from "../layouts/Layout.astro";
   };
 
   function draw() {
+    fitView();
     ctx.clearRect(0, 0, width, height);
     ctx.save();
     ctx.translate(width / 2, height / 2);
+    ctx.scale(view.scale, view.scale);
+    ctx.translate(-view.cx, -view.cy);
 
     // Edges, trimmed to each node's rim so they never show through the
     // translucent dots — edge and dot read as one mark.
@@ -352,8 +386,8 @@ import Layout from "../layouts/Layout.astro";
 
   function nodeAt(clientX: number, clientY: number): Node | null {
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left - width / 2;
-    const y = clientY - rect.top - height / 2;
+    const x = (clientX - rect.left - width / 2) / view.scale + view.cx;
+    const y = (clientY - rect.top - height / 2) / view.scale + view.cy;
     let best: Node | null = null;
     let bestDist = Infinity;
     for (const n of nodes) {
@@ -371,8 +405,8 @@ import Layout from "../layouts/Layout.astro";
   function linkAt(clientX: number, clientY: number): Link | null {
     if (mode !== "people") return null;
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left - width / 2;
-    const y = clientY - rect.top - height / 2;
+    const x = (clientX - rect.left - width / 2) / view.scale + view.cx;
+    const y = (clientY - rect.top - height / 2) / view.scale + view.cy;
     let best: Link | null = null;
     let bestDist = Infinity;
     for (const l of links) {
@@ -447,6 +481,15 @@ import Layout from "../layouts/Layout.astro";
 
   // --- panel -----------------------------------------------------------------
 
+  // The film card's floating ×: unpin/unhover the film, keep any person focus.
+  panel.addEventListener("click", (e) => {
+    if (!(e.target as Element).closest(".card-x")) return;
+    pinned = null;
+    hovered = null;
+    refreshPanel();
+    draw();
+  });
+
   function renderPanel(n: Node | null) {
     panel.hidden = n === null;
     if (!n) {
@@ -479,7 +522,6 @@ import Layout from "../layouts/Layout.astro";
   }
 
   const PAIR_LIST_MAX = 12;
-  const num = (r: number | null) => (r === null ? "-" : `${r}`);
 
   /** A small square avatar for pair cards; a faint block when there's none. */
   const mini = (p: Person) =>
@@ -621,15 +663,15 @@ import Layout from "../layouts/Layout.astro";
   }
 
   @media (max-width: 720px) {
-    .board {
-      height: auto;
-    }
-    #graph {
-      height: 60vh;
-    }
+    /* Same bottom-sheet card as the catalog; the graph keeps the full screen. */
     .panel {
-      position: static;
+      position: fixed;
+      top: auto;
+      right: 0;
+      bottom: 0;
+      left: 0;
       width: auto;
+      max-height: 60vh;
       border: none;
       border-top: var(--rule);
     }

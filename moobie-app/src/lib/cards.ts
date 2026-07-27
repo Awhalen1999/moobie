@@ -38,9 +38,10 @@ const STAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.9121 
 // half a star's width instead of reserving a full star cell with a dead gap.
 const HALF_STAR_SVG = `<svg class="half" viewBox="0 0 12 24" aria-hidden="true"><path d="M11.9997 1C11.6059 1 11.2487 1.2312 11.0874 1.59053L8.27041 7.86702L1.43062 8.60661C1.03903 8.64895 0.708778 8.91721 0.587066 9.2918C0.465355 9.66639 0.574861 10.0775 0.866772 10.342L5.96556 14.9606L4.55534 21.6942C4.4746 22.0797 4.62768 22.4767 4.94632 22.7082C5.26497 22.9397 5.68983 22.9626 6.03151 22.7667L11.9997 19.3447V1Z" fill="currentColor"/></svg>`;
 const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9.1371C2 14 6.01943 16.5914 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371Z" fill="currentColor"/></svg>`;
+const CLOSE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
 
 /** One rating, Letterboxd-style: green stars and an orange heart. */
-export const ratingHtml = (rating: number | null, liked: number) => {
+const ratingHtml = (rating: number | null, liked: number) => {
   const stars =
     rating === null
       ? `<span class="mono muted">unrated</span>`
@@ -71,6 +72,7 @@ export function filmCardHtml(f: Film, name: (username: string) => string): strin
       ? `<div class="row"><span class="mono">gap</span><span class="mono${f.disagreement ? " c-disagreed" : ""}">${f.spread}</span></div>`
       : "";
   return (
+    `<button class="card-x" aria-label="Close">${CLOSE_SVG}</button>` +
     (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +
     `<h3 class="display">${esc(f.title)}${f.year ? ` <span class="muted">(${f.year})</span>` : ""}</h3>` +
     rows +

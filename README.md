@@ -35,21 +35,5 @@ pnpm dev          # → http://localhost:4321, hot reload, local D1
 ```
 
 Dev uses wrangler's local D1 state (the adapter proxies the binding), so it
-never touches production data. Seed it once from `moobie-app/` with
-`pnpm exec wrangler d1 execute moobie --local --file=../db/schema.sql` plus
-whatever rows you want.
-
-**The bot's poll Worker** (rarely needed locally):
-
-```sh
-cd moobie-poll
-pnpm db:local
-cp .dev.vars.example .dev.vars
-pnpm dev --test-scheduled
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"   # fire the cron now
-```
-
-**Ship it** — `pnpm deploy` from each of `moobie-app/` and `moobie-poll/`;
-slash commands re-register with `DISCORD_BOT_TOKEN=... node
-scripts/register-commands.mjs` (guild-scoped, instant). Secrets go in with
-`wrangler secret put`, never into the repo.
+never touches production data. Seeding it, running the poll Worker locally,
+deploying, secrets — all in [operations](./docs/operations.md).
