@@ -68,7 +68,7 @@ export function filmCardHtml(f: Film, name: (username: string) => string): strin
       : "";
   const gap =
     f.spread !== null
-      ? `<div class="row"><span class="mono">gap</span><span class="mono${f.disagreement ? " c-beef" : ""}">${f.spread}</span></div>`
+      ? `<div class="row"><span class="mono">gap</span><span class="mono${f.disagreement ? " c-disagreed" : ""}">${f.spread}</span></div>`
       : "";
   return (
     (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +

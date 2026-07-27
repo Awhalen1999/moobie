@@ -89,7 +89,7 @@ import Layout from "../layouts/Layout.astro";
       low: s.getPropertyValue("--low").trim(),
       mid: s.getPropertyValue("--mid").trim(),
       high: s.getPropertyValue("--high").trim(),
-      beef: s.getPropertyValue("--beef").trim(),
+      disagreed: s.getPropertyValue("--disagreed").trim(),
     };
   }
   new MutationObserver(() => {
@@ -300,7 +300,7 @@ import Layout from "../layouts/Layout.astro";
       const f = n.film!;
       ctx.globalAlpha = inFocus(n) ? 0.72 : 0.08;
       if (f.raters.length > 1) {
-        ctx.fillStyle = f.disagreement ? tokens.beef : f.average !== null ? tokens.high : tokens.ink;
+        ctx.fillStyle = f.disagreement ? tokens.disagreed : f.average !== null ? tokens.high : tokens.ink;
       } else {
         const rating = f.raters[0]?.rating ?? null;
         ctx.fillStyle = rating === null ? tokens.faint : bucket(rating);

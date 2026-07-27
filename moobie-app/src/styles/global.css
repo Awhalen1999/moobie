@@ -39,7 +39,7 @@
   --low: #c73e1d;
   --mid: #8a877c;
   --high: #1e7a52;
-  --beef: #b85c00;
+  --disagreed: #b85c00;
 
   /* Letterboxd's own rating colors — stars and the liked heart. */
   --star: #00e054;
@@ -65,7 +65,7 @@
   --low: #e0562f;
   --mid: #7a776c;
   --high: #3fa572;
-  --beef: #e07b00;
+  --disagreed: #e07b00;
 }
 
 * {
@@ -155,8 +155,8 @@ img {
 .c-high {
   color: var(--high);
 }
-.c-beef {
-  color: var(--beef);
+.c-disagreed {
+  color: var(--disagreed);
 }
 
 /* Segmented controls and control-corner links. */
@@ -186,13 +186,14 @@ img {
   color: var(--paper);
 }
 
-/* Theme switch: docked to the left edge of a nav link, holding a filled ink square.
-   `.seg .theme` outranks the `.seg button` defaults above. */
+/* Theme switch: docked to the left edge of a nav link, a solid ink block.
+   `.seg .theme` outranks the `.seg button` defaults above. The ::before keeps
+   the box sized to its old inner-square dimensions. */
 .seg .theme {
   display: grid;
   place-items: center;
   padding: 0.35rem 0.5rem;
-  background: var(--paper);
+  background: var(--ink);
   border: 1px solid var(--ink);
   cursor: pointer;
 }
@@ -201,7 +202,6 @@ img {
   display: block;
   width: 0.7rem;
   height: 0.7rem;
-  background: var(--ink);
 }
 .theme + .seg-link {
   border-left: none;

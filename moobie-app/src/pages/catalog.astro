@@ -21,6 +21,17 @@ import Layout from "../layouts/Layout.astro";
         <option value="most">most logged</option>
         <option value="gap">biggest gap</option>
       </select>
+      <select id="who" class="sort mono" aria-label="Filter by person">
+        <option value="">everyone</option>
+      </select>
+      <label class="check mono">
+        <input id="shared" type="checkbox" />
+        shared only
+      </label>
+      <label class="check mono">
+        <input id="disagreed" type="checkbox" />
+        disagreement
+      </label>
     </header>
     <div class="grid" id="grid"></div>
     <aside class="panel" id="panel" aria-live="polite" hidden></aside>
@@ -34,6 +45,9 @@ import Layout from "../layouts/Layout.astro";
   const panel = document.getElementById("panel")!;
   const search = document.getElementById("search") as HTMLInputElement;
   const sort = document.getElementById("sort") as HTMLSelectElement;
+  const who = document.getElementById("who") as HTMLSelectElement;
+  const shared = document.getElementById("shared") as HTMLInputElement;
+  const disagreed = document.getElementById("disagreed") as HTMLInputElement;
 
   let films: Film[] = [];
   let people: Person[] = [];
@@ -64,10 +78,13 @@ import Layout from "../layouts/Layout.astro";
     gap: (a, b) => gap(b) - gap(a),
   };
 
-  /** Current search filter + sort applied; "new" keeps payload order. */
+  /** Current search + person filter + sort applied; "new" keeps payload order. */
   function view(): Film[] {
     const q = norm(search.value);
-    const list = q ? films.filter((f) => norm(f.title).includes(q)) : [...films];
+    let list = q ? films.filter((f) => norm(f.title).includes(q)) : [...films];
+    if (who.value) list = list.filter((f) => f.raters.some((r) => r.username === who.value));
+    if (shared.checked) list = list.filter((f) => f.raters.length > 1);
+    if (disagreed.checked) list = list.filter((f) => f.disagreement);
     const cmp = sorters[sort.value];
     if (cmp) list.sort((a, b) => cmp(a, b) || a.title.localeCompare(b.title)); // ties break a–z
     return list;
@@ -75,6 +92,9 @@ import Layout from "../layouts/Layout.astro";
 
   search.addEventListener("input", () => render(view()));
   sort.addEventListener("change", () => render(view()));
+  who.addEventListener("change", () => render(view()));
+  shared.addEventListener("change", () => render(view()));
+  disagreed.addEventListener("change", () => render(view()));
 
   // One listener for the whole wall: open the clicked film's card.
   grid.addEventListener("click", (e) => {
@@ -98,6 +118,11 @@ import Layout from "../layouts/Layout.astro";
   const data = (await res.json()) as { people: Person[]; films: Film[] };
   people = data.people;
   films = data.films; // payload order is newest watch first
+  who.innerHTML +=
+    [...people]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => `<option value="${esc(p.username)}">${esc(p.name)}</option>`)
+      .join("");
   render(films);
 </script>
 
@@ -176,6 +201,38 @@ import Layout from "../layouts/Layout.astro";
   }
   .sort option::checkmark {
     display: none;
+  }
+
+  /* Checkbox drawn as the theme switch's twin: same bordered box, the inner
+     ink square shows when checked. */
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .check input {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 0.35rem;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+  }
+  .check input::before {
+    content: "";
+    display: block;
+    width: 0.7rem;
+    height: 0.7rem;
+  }
+  .check input:checked::before {
+    background: var(--ink);
   }
 
   .grid {

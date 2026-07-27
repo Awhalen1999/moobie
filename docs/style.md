@@ -60,7 +60,7 @@ validator.
 | `--low` | rating ≤ 2 | `#c73e1d` | `#e0562f` |
 | `--mid` | 2.5 – 3.5 (recedes on purpose) | `#8a877c` | `#7a776c` |
 | `--high` | rating ≥ 4 | `#1e7a52` | `#3fa572` |
-| `--beef` | disagreement (spread ≥ 3) | `#b85c00` | `#e07b00` |
+| `--disagreed` | disagreement (spread ≥ 3) | `#b85c00` | `#e07b00` |
 | `--star` / `--heart` | displayed stars / liked heart (Letterboxd's colors, both themes) | `#00e054` / `#ff9010` | same |
 
 Rules: **orange is reserved for disagreement** (same meaning as the Discord
@@ -71,7 +71,7 @@ color. Identity is never color-alone: every colored mark has a legend entry.
 half star) and an orange heart, inlined as `currentColor` paths in
 `index.astro`. The diverging buckets color the graph itself — edges by each
 rating, solo film dots by their one rating, shared film dots green
-(agreement) or `--beef` orange (gap ≥ 3), the same green/orange call the
+(agreement) or `--disagreed` orange (gap ≥ 3), the same green/orange call the
 Discord cards make. Panels show ratings in brand colors.
 
 The **people view** reuses the same poles pair-wise: one edge per pair who
