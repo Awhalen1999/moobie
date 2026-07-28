@@ -10,8 +10,10 @@ bot is HTTP/cron only.
 1. ✅ **Core backend** — schema, shared `@moobie/core`, RSS ingest, hourly poll.
 2. ✅ **Discord bot** — hourly announcement cards plus the commands: `/track`,
    `/untrack`, `/film`, `/film-key`, `/review`, `/review-key`, `/best`,
-   `/worst`, `/favorite`, `/stats`, `/refresh`. (`/vs` was cut; its
-   implementation lives in git history.)
+   `/worst`, `/favorite`, `/stats`. (`/vs` and `/refresh` were cut; their
+   implementations live in git history. `/refresh` was the one command that
+   reached into the poll Worker — cutting it made the poll cron-only, with no
+   public surface and no cross-Worker secret.)
 3. 🔨 **Web** — the node graph (the site's centerpiece, with films and people
    views) and the catalog (poster wall + search + film cards) are built;
    people / stats pages and a real navigation concept are next. The

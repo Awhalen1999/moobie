@@ -6,8 +6,8 @@
 // Idempotent and stateless (invariant #5): every insert is INSERT OR IGNORE on
 // guid, so re-fetching is a no-op and a missed tick self-heals next run.
 //
-// The fetch handler exists so a poll can run on demand — guarded by the
-// TRIGGER_KEY secret; /refresh and manual testing use it.
+// Cron-only: no fetch handler, no public surface. Local testing fires the
+// scheduled handler via `wrangler dev --test-scheduled` (see docs/operations.md).
 
 import {
   buildEntryEmbed,
@@ -32,7 +32,6 @@ interface Env {
   DB: D1Database;
   DISCORD_BOT_TOKEN: string; // secret
   DISCORD_ANNOUNCE_CHANNEL_IDS: string; // plain var: comma-separated channel ids
-  TRIGGER_KEY?: string; // secret
 }
 
 interface PollSummary {
@@ -47,24 +46,9 @@ export default {
     const summary = await poll(env);
     console.log("moobie-poll:", JSON.stringify(summary));
   },
-
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/") {
-      return new Response("moobie-poll is alive. GET /poll?key=... to run a poll.");
-    }
-    if (url.pathname !== "/poll") {
-      return new Response("not found", { status: 404 });
-    }
-    if (!env.TRIGGER_KEY || url.searchParams.get("key") !== env.TRIGGER_KEY) {
-      return new Response("unauthorized", { status: 401 });
-    }
-    const summary = await poll(env);
-    return Response.json(summary);
-  },
 };
 
-/** Poll every active user once. Returns totals for logging / the trigger. */
+/** Poll every active user once. Returns totals for the log line. */
 async function poll(env: Env): Promise<PollSummary> {
   const users = await getActiveUsers(env.DB);
   const summary: PollSummary = { users: users.length, inserted: 0, announced: 0, seeded: [] };
@@ -171,13 +155,36 @@ function announceChannels(env: Env): string[] {
 
 const API_BASE = "https://discord.com/api/v10";
 
-/** POST one embed to a channel as the bot. Throws on a non-OK response. */
+/**
+ * POST one embed to a channel as the bot. Announcement bursts (one user logging
+ * a stack of films) can trip Discord's per-channel rate limit; the 429 body
+ * names its wait, so wait it out and retry once instead of dropping the
+ * announcement. Throws on any other non-OK response, or a retry that still fails.
+ */
 async function sendChannelMessage(
   botToken: string,
   channelId: string,
   embed: DiscordEmbed,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/channels/${channelId}/messages`, {
+  let res = await postEmbed(botToken, channelId, embed);
+  if (res.status === 429) {
+    const body = (await res.json().catch(() => null)) as { retry_after?: number } | null;
+    const waitMs = Math.min(Math.max(body?.retry_after ?? 1, 0) * 1000, 10_000);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    res = await postEmbed(botToken, channelId, embed);
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Discord ${res.status} posting to channel ${channelId}: ${body}`);
+  }
+}
+
+function postEmbed(
+  botToken: string,
+  channelId: string,
+  embed: DiscordEmbed,
+): Promise<Response> {
+  return fetch(`${API_BASE}/channels/${channelId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bot ${botToken}`,
@@ -185,8 +192,4 @@ async function sendChannelMessage(
     },
     body: JSON.stringify({ embeds: [embed] }),
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Discord ${res.status} posting to channel ${channelId}: ${body}`);
-  }
 }

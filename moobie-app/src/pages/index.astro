@@ -602,24 +602,32 @@ import Layout from "../layouts/Layout.astro";
 
   // --- boot ----------------------------------------------------------------
 
-  const res = await fetch("/api/graph");
-  data = (await res.json()) as Payload;
+  // One payload drives everything. If it can't load, say so - an empty board
+  // with no message reads as "no data" and lies.
+  try {
+    const res = await fetch("/api/graph");
+    if (!res.ok) throw new Error(`graph api ${res.status}`);
+    data = (await res.json()) as Payload;
 
-  for (const p of data.people) {
-    if (!p.avatarUrl) continue;
-    const img = new Image();
-    img.src = p.avatarUrl;
-    img.onload = () => draw();
-    avatars.set(p.username, img);
+    for (const p of data.people) {
+      if (!p.avatarUrl) continue;
+      const img = new Image();
+      img.src = p.avatarUrl;
+      img.onload = () => draw();
+      avatars.set(p.username, img);
+    }
+
+    const shared = data.films.filter((f) => f.raters.length > 1).length;
+    tally.textContent = `${data.people.length} people · ${data.films.length} films (${shared} shared) · ${data.logs} logs`;
+  } catch (err) {
+    console.error("moobie: graph payload failed:", err);
+    tally.textContent = "couldn't load the graph - refresh to try again.";
   }
-
-  const shared = data.films.filter((f) => f.raters.length > 1).length;
-  tally.textContent = `${data.people.length} people · ${data.films.length} films (${shared} shared) · ${data.logs} logs`;
 
   resize();
   // The shared view is the point, but until the pool actually overlaps it
   // would be an empty map - open on everything while shared films are scarce.
-  setView(shared >= 4);
+  setView(data.films.filter((f) => f.raters.length > 1).length >= 4);
 </script>
 
 <style>

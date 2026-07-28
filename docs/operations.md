@@ -31,8 +31,10 @@ curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"   # fire the cron now
 
 ## Deploy
 
-`pnpm deploy` from each of `moobie-app/` and `moobie-poll/`. Both bundle their
-own copy of `@moobie/core`, so **shared-code changes need both deploys**.
+`pnpm run deploy` from each of `moobie-app/` and `moobie-poll/` (`run` is
+required — bare `pnpm deploy` hits pnpm's unrelated built-in command). Both
+bundle their own copy of `@moobie/core`, so **shared-code changes need both
+deploys**.
 The website is frozen until it's called ready; the bot ships independently.
 
 Slash commands re-register with:
@@ -48,21 +50,29 @@ command definition change.
 
 Secrets go in with `wrangler secret put`, never into the repo.
 
-| secret              | where             | why                                     |
-|---------------------|-------------------|------------------------------------------|
-| `DISCORD_BOT_TOKEN` | poll Worker       | posts announcements as the bot           |
-| `TRIGGER_KEY`       | poll Worker + app | guards `GET /poll`; `/refresh` calls it  |
+| secret              | where       | why                            |
+|---------------------|-------------|--------------------------------|
+| `DISCORD_BOT_TOKEN` | poll Worker | posts announcements as the bot |
 
 Plain vars (in `wrangler.jsonc`):
 
 - `DISCORD_PUBLIC_KEY` (app) — verifies Ed25519 on `/interactions`.
-- `MOOBIE_POLL_URL` (app) — the poll Worker, for `/refresh`.
 - `DISCORD_ANNOUNCE_CHANNEL_IDS` (poll) — comma-separated channel ids; one
   data pool broadcast to N channels, can span servers.
 
 Script-side: the app ID is hardcoded in `scripts/register-commands.mjs` (a
 public identifier); `DISCORD_GUILD_ID` defaults to moobie's home server with
 an env override.
+
+## Backups
+
+D1's Time Travel keeps automatic point-in-time restore (30 days on paid, 7 on
+free) — `wrangler d1 time-travel` from `moobie-app/` or `moobie-poll/`. For a
+copy that outlives that window, dump occasionally:
+
+```sh
+pnpm exec wrangler d1 export moobie --remote --output=backup.sql
+```
 
 ## Moving servers (runbook)
 

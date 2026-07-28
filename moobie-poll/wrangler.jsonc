@@ -3,6 +3,9 @@
   "name": "moobie-poll",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-17",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  // Cron-only Worker: no fetch handler, so no public URL either.
+  "workers_dev": false,
   "triggers": {
     // Hourly, on the hour. Idempotent: a missed tick self-heals next run.
     "crons": ["0 * * * *"]
@@ -10,8 +13,8 @@
   "vars": {
     // Where announcements go: comma-separated channel ids (one data pool,
     // broadcast to N channels — can span servers). Currently moobie's home
-    // server. Not secrets — those go in via `wrangler secret put`
-    // (DISCORD_BOT_TOKEN, TRIGGER_KEY).
+    // server. Not a secret — the one secret (DISCORD_BOT_TOKEN) goes in via
+    // `wrangler secret put`.
     "DISCORD_ANNOUNCE_CHANNEL_IDS": "1528009127505301716"
   },
   "d1_databases": [

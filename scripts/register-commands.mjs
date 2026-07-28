@@ -150,10 +150,6 @@ const commands = [
       },
     ],
   },
-  {
-    name: "refresh",
-    description: "Check the pool's feeds for new logs right now",
-  },
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

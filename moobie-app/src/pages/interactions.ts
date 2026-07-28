@@ -2,9 +2,9 @@
 // slash command here; we verify the Ed25519 signature on the RAW body before
 // any JSON parsing (invariant #7), then route on the command name.
 //
-// /track and /refresh do network work, so they use Discord's deferred reply:
-// respond "thinking…" within the 3-second window, finish via waitUntil, then
-// edit the reply. Everything else answers directly.
+// /track does network work, so it uses Discord's deferred reply: respond
+// "thinking…" within the 3-second window, finish via waitUntil, then edit the
+// reply. Everything else answers directly.
 
 import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
@@ -48,8 +48,6 @@ const DEFERRED_MESSAGE = 5;
 interface Env {
   DB: D1Database;
   DISCORD_PUBLIC_KEY: string;
-  MOOBIE_POLL_URL: string; // the poll Worker, for /refresh
-  TRIGGER_KEY: string; // secret shared with the poll Worker
 }
 
 const env = workerEnv as unknown as Env;
@@ -103,8 +101,6 @@ export const POST: APIRoute = async ({ request }) => {
         return favorite(interaction);
       case "stats":
         return stats(interaction);
-      case "refresh":
-        return refresh(interaction);
     }
   }
 
@@ -314,30 +310,6 @@ async function stats(interaction: Interaction): Promise<Response> {
   return embeds(buildStatsEmbed(group, { displayNames: names }));
 }
 
-/** /refresh — run a poll right now instead of waiting for the top of the hour. */
-function refresh(interaction: Interaction): Response {
-  waitUntil(finishRefresh(interaction));
-  return json({ type: DEFERRED_MESSAGE });
-}
-
-async function finishRefresh(interaction: Interaction): Promise<void> {
-  let content: string;
-  try {
-    const res = await fetch(`${env.MOOBIE_POLL_URL}/poll?key=${env.TRIGGER_KEY}`);
-    if (!res.ok) throw new Error(`poll trigger ${res.status}`);
-    const s = (await res.json()) as { users: number; inserted: number; announced: number };
-    const feeds = s.users === 1 ? "feed" : "feeds";
-    content =
-      s.inserted === 0
-        ? `✅ Checked ${s.users} ${feeds} - nothing new.`
-        : `✅ Checked ${s.users} ${feeds} - ${s.inserted} new, ${s.announced} announced.`;
-  } catch (err) {
-    console.error("moobie-app: /refresh failed:", err);
-    content = "Couldn't run the refresh - try again in a minute.";
-  }
-  await editReply(interaction, content);
-}
-
 // --- plumbing ---------------------------------------------------------------
 
 /** username -> display name for everyone ever tracked (fallback: username). */
@@ -387,7 +359,9 @@ async function verifySignature(
   }
 }
 
-function hexToBytes(hex: string): Uint8Array {
+// The explicit <ArrayBuffer> matters: WebCrypto's BufferSource rejects the
+// default Uint8Array<ArrayBufferLike>.
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);

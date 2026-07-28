@@ -43,11 +43,11 @@ import Layout from "../layouts/Layout.astro";
 
   const grid = document.getElementById("grid")!;
   const panel = document.getElementById("panel")!;
-  const search = document.getElementById("search") as HTMLInputElement;
-  const sort = document.getElementById("sort") as HTMLSelectElement;
-  const who = document.getElementById("who") as HTMLSelectElement;
-  const shared = document.getElementById("shared") as HTMLInputElement;
-  const disagreed = document.getElementById("disagreed") as HTMLInputElement;
+  const search = document.querySelector<HTMLInputElement>("#search")!;
+  const sort = document.querySelector<HTMLSelectElement>("#sort")!;
+  const who = document.querySelector<HTMLSelectElement>("#who")!;
+  const shared = document.querySelector<HTMLInputElement>("#shared")!;
+  const disagreed = document.querySelector<HTMLInputElement>("#disagreed")!;
 
   let films: Film[] = [];
   let people: Person[] = [];
@@ -118,16 +118,24 @@ import Layout from "../layouts/Layout.astro";
     if (e.key === "Escape") panel.hidden = true;
   });
 
-  const res = await fetch("/api/graph");
-  const data = (await res.json()) as { people: Person[]; films: Film[] };
-  people = data.people;
-  films = data.films; // payload order is newest watch first
-  who.innerHTML +=
-    [...people]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((p) => `<option value="${esc(p.username)}">${esc(p.name)}</option>`)
-      .join("");
-  render(films);
+  // Same payload as the graph. If it can't load, say so - an empty wall with
+  // no message reads as "no films yet" and lies.
+  try {
+    const res = await fetch("/api/graph");
+    if (!res.ok) throw new Error(`graph api ${res.status}`);
+    const data = (await res.json()) as { people: Person[]; films: Film[] };
+    people = data.people;
+    films = data.films; // payload order is newest watch first
+    who.innerHTML +=
+      [...people]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p) => `<option value="${esc(p.username)}">${esc(p.name)}</option>`)
+        .join("");
+    render(films);
+  } catch (err) {
+    console.error("moobie: catalog payload failed:", err);
+    grid.innerHTML = `<p class="mono muted load-error">couldn't load the catalog - refresh to try again.</p>`;
+  }
 </script>
 
 <style>
@@ -253,6 +261,10 @@ import Layout from "../layouts/Layout.astro";
   .grid :global(.tile:hover) {
     outline: 1px solid var(--ink);
     outline-offset: -1px;
+  }
+  .grid :global(.load-error) {
+    grid-column: 1 / -1;
+    padding: var(--space-2);
   }
   .grid :global(.no-poster) {
     display: flex;

@@ -1,8 +1,5 @@
 # Copy to .dev.vars for local `wrangler dev`. Real values are set in production
 # with `wrangler secret put <NAME>` and never committed.
 
-# Guards the on-demand GET /poll?key=... trigger endpoint.
-TRIGGER_KEY=pick-any-local-secret
-
 # The bot token, from the Discord developer portal (Bot tab -> Reset Token).
 DISCORD_BOT_TOKEN=paste-bot-token-here
