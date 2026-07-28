@@ -51,9 +51,8 @@ the pair card's film table, the title itself wears the pair's gap color.)
 ## Data colors
 
 Ratings are polarity, so graph edges get a **diverging pair + neutral
-midpoint** — validated with the dataviz palette checker against both surfaces
-(CVD ΔE ≥ 8, contrast ≥ 3:1). Don't eyeball replacements; re-run the
-validator.
+midpoint**, checked against both surfaces for color-blind separation
+(ΔE ≥ 8) and contrast (≥ 3:1). Don't eyeball replacements.
 
 | token | job | light | dark |
 |---|---|---|---|
@@ -86,3 +85,10 @@ node), click focuses (a person's edges stay lit, the rest fades to near-zero),
 click empty space resets — and the panel simply isn't there when nothing is
 selected. No drag, no zoom, no tooltips chasing the cursor, no instructional
 placeholder text. Transitions ~250ms ease; nothing bounces.
+
+## Copy
+
+Plain short sentences, nothing trying to be funny. Misses end in "yet";
+successes get exactly one leading emoji (🎬 👋 ✅). Replies never name the
+machinery (workers, polling, rss). Bot text uses plain hyphens, never
+em-dashes.

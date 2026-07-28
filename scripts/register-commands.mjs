@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-// Register moobie's slash commands, guild-scoped (updates appear instantly).
-// Re-run any time the command definitions change — PUT replaces the whole set.
+// Register moobie's slash commands, guild-scoped so updates land instantly.
+// Re-run any time the definitions change — PUT replaces the whole set.
 //
 // Usage: DISCORD_BOT_TOKEN=... node scripts/register-commands.mjs
 
-const APP_ID = "1527818312837370036"; // app identity — never changes
-// moobie's home server; override per-server with DISCORD_GUILD_ID=... (the one
-// server-specific value here — see "Moving servers" in docs/operations.md).
+const APP_ID = "1527818312837370036"; // public app id, never changes
+// moobie's home server. Override with DISCORD_GUILD_ID=... for another server.
 const GUILD_ID = process.env.DISCORD_GUILD_ID ?? "1528008510825168966";
 
 const STRING = 3; // Discord option type

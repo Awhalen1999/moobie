@@ -2,7 +2,7 @@
   "name": "moobie",
   "private": true,
   "version": "1.0.0",
-  "description": "Discord bot + web dashboard that logs a friend group's Letterboxd diaries.",
+  "description": "letterboxd rss feed scraper discord bot + ui",
   "scripts": {
     "dev": "pnpm --filter moobie-app dev",
     "db:remote": "wrangler d1 execute moobie --remote --file=./db/schema.sql"

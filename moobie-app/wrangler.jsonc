@@ -4,6 +4,9 @@
 	"compatibility_flags": ["global_fetch_strictly_public"],
 	"name": "moobie-app",
 	"main": "@astrojs/cloudflare/entrypoints/server",
+	// The site's home. Deploying wires the DNS record and cert. workers.dev
+	// stays on — Discord's interactions endpoint points there.
+	"routes": [{ "pattern": "moobie.awln.dev", "custom_domain": true }],
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"

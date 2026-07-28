@@ -7,8 +7,8 @@
   // Cron-only Worker: no fetch handler, so no public URL either.
   "workers_dev": false,
   "triggers": {
-    // Hourly, on the hour. Idempotent: a missed tick self-heals next run.
-    "crons": ["0 * * * *"]
+    // Every 30 minutes. A missed tick self-heals on the next one.
+    "crons": ["*/30 * * * *"]
   },
   "vars": {
     // Where announcements go: comma-separated channel ids (one data pool,

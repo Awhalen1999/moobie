@@ -1,7 +1,5 @@
-// Analytics — pure functions over log entries (invariant #4). No DB, no network,
-// no framework. The caller loads rows (e.g. getEntriesByFilmKey) and passes them
-// in; the poll loop, the Discord commands, and the web API all share these exact
-// functions. Keep it that way: never load data or touch a route in here.
+// Pure functions over log entries — no DB, no network. Callers load the rows
+// and pass them in; the bot and the site share these exact functions.
 
 import type { FilmCatalogEntry, LogEntry } from "./types.ts";
 
@@ -30,10 +28,9 @@ export interface FilmComparison {
 export const DISAGREEMENT_THRESHOLD = 3;
 
 /**
- * Compare one film across all its log entries. Pass every entry for a single
- * film_key (rewatches and multiple users included); each user is collapsed to
- * their most recent watch. Returns per-user ratings plus average, spread, and a
- * disagreement flag. Returns null if given no entries.
+ * Compare one film across everyone who logged it. Pass every entry for one
+ * film_key; each user collapses to their most recent watch. Null if given
+ * no entries.
  */
 export function compareFilm(
   entries: LogEntry[],
@@ -66,12 +63,10 @@ export function compareFilm(
 }
 
 /**
- * Find the film a human meant. Case, punctuation, and spacing insensitive:
- * query and titles both collapse to lowercase alphanumerics, so "i, robot",
- * "I ROBOT", and "irobot" all hit "I, Robot". Exact normalized match beats
- * prefix beats substring; ties go to the most-logged film, then the most
- * recently ingested. Returns null when nothing matches — the caller points
- * people at /film-key, which is exact and always works.
+ * Find the film a human meant. Query and titles both collapse to lowercase
+ * alphanumerics, so "i, robot", "I ROBOT", and "irobot" all hit "I, Robot".
+ * Exact match beats prefix beats substring; ties go to the most-logged film,
+ * then the most recently ingested. Null when nothing matches.
  */
 export function findFilm(
   catalog: FilmCatalogEntry[],
@@ -122,8 +117,8 @@ export function worstFilms(entries: LogEntry[]): Superlative | null {
 
 /**
  * The films at one end of a user's ratings. Each film counts once, at its most
- * recent *rated* log — so an unrated rewatch never erases a rating. Every film
- * tied at the extreme rating is included. Returns null when nothing is rated.
+ * recent *rated* log — an unrated rewatch never erases a rating. Ties at the
+ * extreme are all included. Null when nothing is rated.
  */
 function extreme(
   entries: LogEntry[],
@@ -193,9 +188,8 @@ function isNewer(a: LogEntry, b: LogEntry): boolean {
 }
 
 /**
- * Order two entries by watch recency, oldest first; guid breaks ties
- * deterministically. The one comparator for log recency — sort ascending with
- * it directly, or flip the arguments for newest-first.
+ * Order two entries by watch recency, oldest first; guid breaks ties. The one
+ * comparator for log recency — flip the arguments for newest-first.
  */
 export function compareRecency(a: LogEntry, b: LogEntry): number {
   const da = a.watched_date ?? "";

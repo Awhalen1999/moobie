@@ -1,8 +1,5 @@
-// Domain types for moobie.
-//
-// Row types use snake_case to match the D1 column names exactly. D1 returns rows
-// keyed by column name, so `SELECT *` maps straight onto these types with no
-// transform layer — one less place for bugs. SQL shape == TS shape, on purpose.
+// Domain types. Row types use snake_case to match the D1 columns exactly, so
+// SELECT * maps straight onto them — no transform layer.
 
 /** A diary entry parsed from Letterboxd RSS, ready to INSERT. */
 export interface ParsedEntry {

@@ -1,7 +1,5 @@
-// Discord cards — pure embed builders only, no delivery and no I/O, so every
-// card moobie posts is defined in this one file. The poll Worker's announcements
-// and the /interactions replies share these shapes; sending lives with the poll
-// Worker (invariant #6: bot token, never channel webhooks).
+// Every card moobie posts, defined in one file. Pure builders — no delivery,
+// no I/O. Sending lives with the poll Worker.
 
 import type { FilmComparison, Superlative, UserRating } from "./analytics.ts";
 import type { LogEntry, TrackedUser, UserStats } from "./types.ts";
@@ -31,9 +29,8 @@ export interface DiscordEmbed {
 }
 
 /**
- * Render a 0.5–5.0 rating as emoji stars, e.g. 3.5 -> "⭐ ⭐ ⭐ ½ (3.5)".
- * Null -> "not rated". Discord can't letter-space or color text, so the gold
- * comes from the emoji and the tracking is baked into the string.
+ * Render a rating as emoji stars, e.g. 3.5 -> "⭐ ⭐ ⭐ ½ (3.5)".
+ * Null -> "not rated".
  */
 export function stars(rating: number | null): string {
   if (rating === null) return "not rated";
@@ -61,9 +58,8 @@ export function filmTitle(film: { film_title: string; film_year: number | null }
 }
 
 /**
- * Build the embed announcing one new diary entry. `comparison` is the result of
- * compareFilm() over every entry for this film (may be null if unavailable);
- * when present, other users' ratings and any disagreement are shown.
+ * The announcement for one new log. `comparison` is compareFilm() over every
+ * entry for the film; when present, everyone else's ratings show too.
  */
 export function buildEntryEmbed(
   entry: LogEntry,
@@ -74,8 +70,8 @@ export function buildEntryEmbed(
   const name = (username: string) => displayNames[username] ?? username;
   const disagreement = comparison?.disagreement ?? false;
 
-  // Em-spaces (U+2003) keep clear air between the rating, the heart, and the
-  // rewatch marker without relying on consecutive-space rendering.
+  // Em-spaces keep air between the rating, heart, and rewatch marker —
+  // Discord collapses consecutive normal spaces.
   const rating = [
     `**${stars(entry.rating)}**`,
     entry.liked ? "❤️" : "",
@@ -107,9 +103,8 @@ export function buildEntryEmbed(
 }
 
 /**
- * Card for /film and /film-key — one film across the whole group. Small poster
- * (it's a lookup card, not an announcement), one line per rater, avg in the
- * footer, and the name-vs-name gap field when raters disagree.
+ * Card for /film and /film-key — one film across the group. One line per
+ * rater, avg in the footer, the name-vs-name gap field when raters disagree.
  */
 export function buildFilmEmbed(
   comparison: FilmComparison,
@@ -140,8 +135,8 @@ export function buildFilmEmbed(
 }
 
 /**
- * Card for /stats — one line of numbers per user. Exactly one user gets their
- * name in the title; a group card is titled for the whole pool.
+ * Card for /stats — one line of numbers per user. A single user gets their
+ * name in the title; the group card is titled for the pool.
  */
 export function buildStatsEmbed(
   stats: UserStats[],
@@ -160,10 +155,7 @@ export function buildStatsEmbed(
   };
 }
 
-/**
- * Card for /best and /worst — every film at one end of a person's ratings,
- * rendered as the shared film-list card.
- */
+/** Card for /best and /worst — every film at one end of a person's ratings. */
 export function buildSuperlativeEmbed(
   kind: "best" | "worst",
   superlative: Superlative,
@@ -181,10 +173,7 @@ export function buildSuperlativeEmbed(
   );
 }
 
-/**
- * Card for /favorite — every film a person has liked, rendered as the shared
- * film-list card.
- */
+/** Card for /favorite — every film a person has liked. */
 export function buildFavoritesEmbed(
   favorites: LogEntry[],
   context: EmbedContext = {},
@@ -203,10 +192,9 @@ export function buildFavoritesEmbed(
 const LIST_MAX = 25;
 
 /**
- * The shared film-list card (/best, /worst, /favorite): no title, the person as
- * the author line, one line per film ("**Title (Year)** - stars - Logged date"),
- * most recently watched first, the most recent film's poster below, and a count
- * in the footer. Pass at least one film (the routes guard the empty case).
+ * The shared film-list card (/best, /worst, /favorite): the person as the
+ * author line, one line per film, newest watch first, the newest film's poster
+ * below. Pass at least one film — the routes guard the empty case.
  */
 function filmListEmbed(
   heading: string,
@@ -239,10 +227,7 @@ function filmListEmbed(
 
 // --- helpers -------------------------------------------------------------
 
-/**
- * The "Other reviews" field: how everyone else rated this film. Disagreement
- * shows only as the orange stripe here — the named gap field is /film's job.
- */
+/** The "Other reviews" field — how everyone else rated this film. */
 function comparisonFields(
   entry: LogEntry,
   comparison: FilmComparison | null,
@@ -266,16 +251,12 @@ function ratingLine(r: UserRating, name: (username: string) => string): string {
   return `**${name(r.username)}** - ${stars(r.rating)}${r.liked ? "\u2003❤️" : ""}`;
 }
 
-// Em-spaces separate the stats — same visual rhythm as the rating rows on cards.
 function statsLine(s: UserStats): string {
   const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
   return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
 }
 
-/**
- * The two extreme raters, name vs name — shown only when the disagreement
- * threshold trips, on both the announcement and the /film card.
- */
+/** The two extreme raters, name vs name — shown when the gap threshold trips. */
 function biggestGapField(
   comparison: FilmComparison | null,
   name: (username: string) => string,

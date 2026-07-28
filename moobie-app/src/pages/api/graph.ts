@@ -1,6 +1,6 @@
 // The graph payload: active people plus every film they've logged, each film
-// carrying the same compareFilm() result the Discord cards use (invariant #4 —
-// one brain, every surface). The client turns raters into edges.
+// carrying the same compareFilm() result the Discord cards use. The client
+// turns raters into edges.
 
 import type { APIRoute } from "astro";
 import { env as workerEnv } from "cloudflare:workers";

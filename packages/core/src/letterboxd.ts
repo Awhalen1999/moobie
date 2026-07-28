@@ -1,29 +1,24 @@
-// Letterboxd fetch layer — the one boundary between moobie and Letterboxd.
-// v1 is RSS only. Everything downstream consumes ParsedEntry, so swapping in a
-// CSV or API source later means adding a sibling function, not touching callers
-// (invariant #3).
+// The one boundary between moobie and Letterboxd. RSS only — everything
+// downstream consumes ParsedEntry, so another source later is a sibling
+// function, not a rewrite.
 //
 // The feed mixes diary watches with list items; only watches carry
-// <letterboxd:watchedDate>, so that tag's presence is our filter. The real data
-// lives in the letterboxd:-namespaced tags — <title> is a dirty display string
-// ("Film, 2024 - ★★★½") and is never parsed.
+// <letterboxd:watchedDate>, so that tag is the filter. The real data lives in
+// the letterboxd:-namespaced tags — <title> is a display string, never parsed.
 
 import { XMLParser } from "fast-xml-parser";
 import type { ParsedEntry } from "./types.ts";
 
 const RSS_BASE = "https://letterboxd.com";
 
-// Letterboxd occasionally stalls a connection instead of erroring (rate
-// limiting). Without a timeout that hangs the caller until the runtime kills
-// it silently; with one it becomes a normal thrown error the caller handles.
+// Letterboxd sometimes stalls a connection instead of erroring; a timeout
+// turns that into a normal thrown error.
 const FETCH_TIMEOUT_MS = 30_000;
 
-// parseTagValue:false keeps every leaf a string, so a film literally titled
-// "1917" stays "1917" instead of becoming the number 1917. We convert the few
-// numeric fields ourselves, deliberately. htmlEntities:true decodes numeric
-// character references like &#039; (Letterboxd uses these for apostrophes), which
-// plain entity processing leaves untouched. isArray keeps a single-item feed an
-// array. ignoreAttributes collapses <guid isPermaLink="false">X</guid> to "X".
+// parseTagValue:false keeps every leaf a string, so a film titled "1917" stays
+// "1917" — the few numeric fields are converted by hand. htmlEntities decodes
+// references like &#039;. isArray keeps a single-item feed an array;
+// ignoreAttributes collapses <guid isPermaLink="false">X</guid> to "X".
 const parser = new XMLParser({
   ignoreAttributes: true,
   parseTagValue: false,
@@ -44,9 +39,8 @@ export async function getRecentEntries(username: string): Promise<ParsedEntry[]>
 }
 
 /**
- * Best-effort avatar for a user, scraped from their profile page's og:image
- * meta tag (the RSS feed carries no avatar). Returns null on any failure —
- * an avatar is nice-to-have, never load-bearing.
+ * Best-effort avatar, from the profile page's og:image tag (the feed carries
+ * none). Null on any failure — avatars are nice-to-have.
  */
 export async function getAvatarUrl(username: string): Promise<string | null> {
   try {
@@ -119,10 +113,10 @@ function isEntry(e: ParsedEntry | null): e is ParsedEntry {
 }
 
 /**
- * The film's global slug, which every user's link to that film shares
- * (e.g. .../film/toy-story-4/ or .../film/toy-story-4/1/ for a rewatch).
- * This groups the same film across users far more reliably than title+year.
- * Falls back to a normalized title-year only if the link is unexpectedly shaped.
+ * The film's Letterboxd slug, shared by every user's link to it
+ * (.../film/toy-story-4/, or .../film/toy-story-4/1/ for a rewatch) — it
+ * groups a film across users better than title + year. Falls back to a
+ * normalized title-year if the link is shaped wrong.
  */
 function filmKey(link: string | null, title: string, year: number | null): string {
   const slug = link?.match(/\/film\/([^/]+)/)?.[1];
@@ -137,9 +131,9 @@ function extractPoster(description: string | undefined): string | null {
 }
 
 /**
- * Best-effort review text. The description CDATA is the poster <img>, a
- * "Watched on ..." line, and (if the user wrote one) the review. We drop the
- * first two and any remaining markup; whatever is left is the review, or null.
+ * The description CDATA is the poster <img>, a "Watched on ..." line, and (if
+ * the user wrote one) the review. Drop the first two and any leftover markup;
+ * what remains is the review, or null.
  */
 function extractReview(description: string | undefined): string | null {
   if (!description) return null;

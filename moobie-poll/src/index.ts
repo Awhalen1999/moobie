@@ -1,13 +1,10 @@
-// moobie-poll — the hourly cron Worker: for each active user, fetch their
-// Letterboxd feed, insert anything new, and announce the genuinely-new rows to
-// Discord as the bot. All real logic lives in @moobie/core; this file is the
-// glue, plus delivery (core's embed builders stay pure of I/O).
+// moobie-poll — the cron Worker. Every 30 minutes: fetch each tracked
+// Letterboxd feed, save anything new, announce it to Discord as the bot.
+// The logic lives in @moobie/core; this file is glue plus delivery.
 //
-// Idempotent and stateless (invariant #5): every insert is INSERT OR IGNORE on
-// guid, so re-fetching is a no-op and a missed tick self-heals next run.
-//
-// Cron-only: no fetch handler, no public surface. Local testing fires the
-// scheduled handler via `wrangler dev --test-scheduled` (see docs/operations.md).
+// Inserts are INSERT OR IGNORE on guid, so re-fetching is a no-op and a missed
+// tick heals itself on the next one. Cron-only — no fetch handler, no public
+// URL. Run it locally with `wrangler dev --test-scheduled`.
 
 import {
   buildEntryEmbed,
@@ -77,9 +74,8 @@ async function pollUser(
 ): Promise<UserResult> {
   const username = user.username;
 
-  // If we hold nothing for this user yet, this is their first ingest: insert the
-  // backlog but stay quiet, so adding a user doesn't flood the channels with
-  // ~50 posts. Announcements start on the next poll, for genuinely new logs.
+  // First ingest for this user: save their backlog quietly, so tracking
+  // someone doesn't flood the channel. Announcements start with their next log.
   const seeding = (await countEntriesForUser(env.DB, username)) === 0;
 
   let entries: ParsedEntry[];
@@ -106,9 +102,8 @@ async function pollUser(
 }
 
 /**
- * The user's Letterboxd pfp for embeds. Fetched from their profile the first
- * time it's needed, then served from the DB. Null (and retried next time) if
- * the profile fetch fails — avatars are cosmetic, never blocking.
+ * The user's Letterboxd pfp, fetched once and then served from the DB.
+ * Null if the fetch fails (retried next time) — avatars are cosmetic.
  */
 async function ensureAvatar(db: D1Database, user: TrackedUser): Promise<string | null> {
   if (user.avatar_url) return user.avatar_url;
@@ -138,8 +133,7 @@ async function announce(
       await sendChannelMessage(env.DISCORD_BOT_TOKEN, channelId, embed);
       posted++;
     } catch (err) {
-      // A failed post drops one announcement (the row is already saved); log and
-      // keep going rather than abandon the remaining channels or entries.
+      // The row is already saved; log the miss and keep going.
       console.error(`moobie-poll: announce failed for ${entry.guid} -> ${channelId}:`, err);
     }
   }
@@ -156,10 +150,9 @@ function announceChannels(env: Env): string[] {
 const API_BASE = "https://discord.com/api/v10";
 
 /**
- * POST one embed to a channel as the bot. Announcement bursts (one user logging
- * a stack of films) can trip Discord's per-channel rate limit; the 429 body
- * names its wait, so wait it out and retry once instead of dropping the
- * announcement. Throws on any other non-OK response, or a retry that still fails.
+ * POST one embed to a channel as the bot. A burst of announcements can trip
+ * Discord's rate limit; the 429 says how long to wait, so wait and retry once.
+ * Throws if the response still isn't OK.
  */
 async function sendChannelMessage(
   botToken: string,

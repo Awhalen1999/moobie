@@ -1,6 +1,6 @@
 ---
-// Bare site shell: fonts, tokens, and the pre-paint theme stamp. No header or
-// nav yet — navigation gets designed after the core pages exist.
+// Bare site shell: fonts, tokens, and the pre-paint theme stamp. No nav yet —
+// it gets designed after the core pages exist.
 import "../styles/global.css";
 
 interface Props {
@@ -16,8 +16,6 @@ const { title = "moobie" } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content="A friend group's Letterboxd logs, mapped." />
-    <!-- Work-in-progress on workers.dev: drop this when moobie.awln.dev points here. -->
-    <meta name="robots" content="noindex" />
     <title>{title}</title>
     <script is:inline>
       // Stamp the theme before first paint: stored choice, else system.

@@ -1,10 +1,6 @@
-// D1 query helpers — the single DB module, imported by both deploys
-// (invariant #8: one copy of every query). Every function takes the D1 binding
-// as its first argument rather than reaching into global env, so the same
-// functions serve the poll Worker and the Astro endpoints alike.
-//
-// Invariant #1: every write is INSERT OR IGNORE on a UNIQUE key, so re-ingesting
-// the same entry is a no-op and every writer is idempotent.
+// The one query module, shared by both Workers. Every function takes the D1
+// binding as its first argument. Writes are INSERT OR IGNORE on a unique key,
+// so re-ingesting the same entry is a no-op.
 
 import type {
   FilmCatalogEntry,
@@ -44,9 +40,8 @@ export async function countEntriesForUser(
 
 /**
  * Insert parsed entries, skipping guids we already have. Returns only the rows
- * actually inserted (meta.changes === 1) — exactly what to announce. One
- * statement per row: plenty fast at friend-group volume, and no batch-result
- * bookkeeping to get wrong.
+ * actually inserted — exactly what to announce. One statement per row is
+ * plenty at this scale.
  */
 export async function insertEntries(
   db: D1Database,
@@ -125,9 +120,8 @@ export function getEntriesForUser(
 }
 
 /**
- * The group's whole film catalog: one row per film with log count and recency.
- * Small by construction (only films the group has logged), so title matching
- * happens in code — see findFilm() in analytics — not in SQL.
+ * One row per film the group has logged, with log count and recency. Small by
+ * construction, so title matching happens in code (findFilm), not SQL.
  */
 export function getFilmCatalog(db: D1Database): Promise<FilmCatalogEntry[]> {
   return db
@@ -176,8 +170,8 @@ export interface TrackedUserDetails {
 }
 
 /**
- * Add (or re-activate) a tracked user. Idempotent on username; re-tracking with
- * new details updates them (COALESCE keeps existing values when none given).
+ * Add (or re-activate) a tracked user. Re-tracking with new details updates
+ * them; COALESCE keeps the existing values when none are given.
  */
 export async function addTrackedUser(
   db: D1Database,

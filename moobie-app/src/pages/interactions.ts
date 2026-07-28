@@ -1,9 +1,9 @@
-// Discord interactions endpoint — the bot's inbound half. Discord POSTs every
-// slash command here; we verify the Ed25519 signature on the RAW body before
-// any JSON parsing (invariant #7), then route on the command name.
+// The bot's inbound half. Discord POSTs every slash command here; the Ed25519
+// signature is verified on the raw body before any JSON parsing, then the
+// command name picks a handler.
 //
-// /track does network work, so it uses Discord's deferred reply: respond
-// "thinking…" within the 3-second window, finish via waitUntil, then edit the
+// /track does network work, so it uses Discord's deferred reply: answer
+// "thinking…" inside the 3-second window, finish via waitUntil, edit the
 // reply. Everything else answers directly.
 
 import type { APIRoute } from "astro";
@@ -110,9 +110,9 @@ export const POST: APIRoute = async ({ request }) => {
 // --- commands --------------------------------------------------------------
 
 /**
- * /track <username> [display_name] — start tracking a Letterboxd diary.
- * Defers, then: validate the feed, grab the avatar, upsert the user, and seed
- * their backlog silently (so the next poll only announces genuinely new logs).
+ * /track <username> [display_name] — start tracking a feed. Defers, then:
+ * validate the feed, grab the avatar, upsert the user, seed their backlog
+ * quietly so only genuinely new logs get announced.
  */
 function track(interaction: Interaction): Response {
   const username = option(interaction, "username")?.trim().toLowerCase();
@@ -154,7 +154,7 @@ async function finishTrack(
       content = `🎬 Now tracking **${shown}** (${profile}). ${stored}`;
     }
   } catch (err) {
-    // Reply stays friendly; the real error goes to the logs for forensics.
+    // The reply stays friendly; the real error goes to the logs.
     console.error(`moobie-app: /track failed for "${username}":`, err);
     content =
       `Couldn't read \`letterboxd.com/${username}/rss/\` - ` +
@@ -176,7 +176,7 @@ async function untrack(interaction: Interaction): Promise<Response> {
 
 /**
  * /film <title> — how everyone rated one film. Forgiving search: case,
- * punctuation, and spacing don't matter (findFilm normalizes both sides).
+ * punctuation, and spacing don't matter.
  */
 async function film(interaction: Interaction): Promise<Response> {
   const query = option(interaction, "title")?.trim();
@@ -235,7 +235,7 @@ async function reviewCard(
   const comparison = compareFilm(entries);
   if (!comparison) return msg(notFound ?? "Nobody's logged that yet.");
 
-  // Rows arrive newest-first (the query orders them), so the first hit wins.
+  // Rows arrive newest-first, so the first hit is their latest log.
   const latest = entries.find((e) => e.username === username);
   if (!latest) {
     return msg(`**${username}** hasn't logged **${filmTitle(comparison)}**.`);
@@ -334,7 +334,7 @@ function embeds(...list: DiscordEmbed[]): Response {
   return json({ type: MESSAGE, data: { embeds: list } });
 }
 
-/** Verify Discord's Ed25519 signature over timestamp+rawBody (WebCrypto). */
+/** Verify Discord's Ed25519 signature over timestamp + raw body. */
 async function verifySignature(
   publicKeyHex: string,
   signatureHex: string,
@@ -359,8 +359,8 @@ async function verifySignature(
   }
 }
 
-// The explicit <ArrayBuffer> matters: WebCrypto's BufferSource rejects the
-// default Uint8Array<ArrayBufferLike>.
+// The explicit <ArrayBuffer> matters — WebCrypto rejects the default
+// Uint8Array<ArrayBufferLike>.
 function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -386,7 +386,7 @@ async function editReply(interaction: Interaction, content: string): Promise<voi
       },
     );
   } catch (err) {
-    // Nothing to tell the user through a reply we can't edit - just leave a trace.
+    // Can't reach the user through a reply we can't edit — just leave a trace.
     console.error("moobie-app: editReply failed:", err);
   }
 }
