@@ -240,73 +240,68 @@ const avgStat = (average: number | null) =>
   average === null ? "⭐ no ratings" : `⭐ ${average} avg`;
 
 /** Card for /best and /worst — every film at one end of a person's ratings. */
-export function buildSuperlativeEmbed(
+export function buildSuperlativeCard(
   kind: "best" | "worst",
   superlative: Superlative,
   context: EmbedContext = {},
-): DiscordEmbed {
-  const { avatarUrl = null, displayNames = {} } = context;
+): Container {
+  const { displayNames = {} } = context;
   const { films } = superlative;
   const name = displayNames[films[0]!.username] ?? films[0]!.username;
   const plural = films.length === 1 ? "" : "s";
-  return filmListEmbed(
-    `${name}'s ${kind} film${plural}`,
-    films,
-    `${films.length} film${plural}`,
-    avatarUrl,
-  );
+  return filmListCard(`${name}'s ${kind} film${plural}`, films, `${films.length} film${plural}`);
 }
 
 /** Card for /favorite — every film a person has liked. */
-export function buildFavoritesEmbed(
+export function buildFavoritesCard(
   favorites: LogEntry[],
   context: EmbedContext = {},
-): DiscordEmbed {
-  const { avatarUrl = null, displayNames = {} } = context;
+): Container {
+  const { displayNames = {} } = context;
   const name = displayNames[favorites[0]!.username] ?? favorites[0]!.username;
-  return filmListEmbed(
+  return filmListCard(
     `${name}'s favorite films`,
     favorites,
     `${favorites.length} favorite${favorites.length === 1 ? "" : "s"}`,
-    avatarUrl,
   );
 }
 
-/** Films shown by name in a list card before collapsing to "+ N more". */
-const LIST_MAX = 25;
+// Films shown in a list card — posters and lines both — before "+ N more".
+// 9 keeps the poster gallery a clean 3x3; 10 adds a full-width hero tile.
+const LIST_MAX = 9;
 
 /**
- * The shared film-list card (/best, /worst, /favorite): the person as the
- * author line, one line per film, newest watch first, the newest film's poster
- * below. Pass at least one film — the routes guard the empty case.
+ * The shared film-list card (/best, /worst, /favorite): heading with the
+ * person's link, a strip of the films' posters, then one rating-first line
+ * per film, newest watch first. Pass at least one film — the routes guard
+ * the empty case.
  */
-function filmListEmbed(
-  heading: string,
-  films: LogEntry[],
-  footer: string,
-  avatarUrl: string | null,
-): DiscordEmbed {
+function filmListCard(heading: string, films: LogEntry[], tally: string): Container {
   const first = films[0]!;
+  const shown = films.slice(0, LIST_MAX);
 
-  const lines = films.slice(0, LIST_MAX).map((e) => {
-    const logged = friendlyDate(e.watched_date);
-    return `**${filmTitle(e)}** - ${stars(e.rating)}${logged ? ` - Logged ${logged}` : ""}`;
-  });
+  const posters = shown
+    .filter((e) => e.poster_url)
+    .map((e) => ({ media: { url: e.poster_url! } }));
+
+  const lines = shown.map((e) => `${stars(e.rating)} - **${filmTitle(e)}**`);
   const more = films.length - LIST_MAX;
-  if (more > 0) lines.push(`+ ${more} more`);
+  if (more > 0) lines.push(`-# + ${more} more`);
 
-  const embed: DiscordEmbed = {
-    author: {
-      name: heading,
-      url: `https://letterboxd.com/${first.username}/`,
-      ...(avatarUrl ? { icon_url: avatarUrl } : {}),
-    },
-    description: lines.join("\n"),
-    color: COLOR_DEFAULT,
-    footer: { text: footer },
+  return {
+    type: 17,
+    accent_color: COLOR_DEFAULT,
+    components: [
+      text(
+        `## ${heading}\n-# [letterboxd.com/${first.username}](https://letterboxd.com/${first.username}/) · ${tally}`,
+      ),
+      { type: 14 as const, divider: true },
+      ...(posters.length > 0
+        ? [{ type: 12 as const, items: posters }, { type: 14 as const, divider: true }]
+        : []),
+      text(lines.join("\n")),
+    ],
   };
-  if (first.poster_url) embed.image = { url: first.poster_url };
-  return embed;
 }
 
 // --- helpers -------------------------------------------------------------

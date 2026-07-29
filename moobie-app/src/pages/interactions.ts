@@ -12,10 +12,10 @@ import {
   addTrackedUser,
   bestFilms,
   buildEntryEmbed,
-  buildFavoritesEmbed,
+  buildFavoritesCard,
   buildFilmEmbed,
   buildStatsCard,
-  buildSuperlativeEmbed,
+  buildSuperlativeCard,
   compareFilm,
   deactivateTrackedUser,
   displayNameMap,
@@ -281,7 +281,7 @@ async function superlativeCard(
   const superlative = (kind === "best" ? bestFilms : worstFilms)(entries);
   if (!superlative) return msg(`**${username}** hasn't rated anything yet.`);
 
-  return embeds(buildSuperlativeEmbed(kind, superlative, await userContext(username)));
+  return components(buildSuperlativeCard(kind, superlative, await userContext(username)));
 }
 
 /** /favorite <username> — every film a person has liked, with their ratings. */
@@ -293,7 +293,7 @@ async function favorite(interaction: Interaction): Promise<Response> {
   const favorites = favoriteFilms(entries);
   if (favorites.length === 0) return msg(`**${username}** hasn't liked anything yet.`);
 
-  return embeds(buildFavoritesEmbed(favorites, await userContext(username)));
+  return components(buildFavoritesCard(favorites, await userContext(username)));
 }
 
 /** /stats [username] — one person's numbers, or the whole group's. */
