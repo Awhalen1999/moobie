@@ -102,38 +102,6 @@ export function buildEntryEmbed(
   return embed;
 }
 
-/**
- * Card for /film and /film-key — one film across the group. One line per
- * rater, avg in the footer, the name-vs-name gap field when raters disagree.
- */
-export function buildFilmEmbed(
-  comparison: FilmComparison,
-  context: EmbedContext = {},
-): DiscordEmbed {
-  const { displayNames = {} } = context;
-  const name = (username: string) => displayNames[username] ?? username;
-
-  const summary = [
-    `${comparison.ratings.length} logged`,
-    comparison.average !== null ? `⭐ avg ${comparison.average}` : "",
-  ]
-    .filter(Boolean)
-    .join("\u2003");
-
-  const embed: DiscordEmbed = {
-    title: filmTitle(comparison),
-    url: `https://letterboxd.com/film/${comparison.film_key}/`,
-    description: comparison.ratings.map((r) => ratingLine(r, name)).join("\n"),
-    color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
-    footer: { text: summary },
-  };
-  if (comparison.poster_url) embed.thumbnail = { url: comparison.poster_url };
-
-  const gap = biggestGapField(comparison, name);
-  if (gap) embed.fields = [gap];
-  return embed;
-}
-
 // --- Components V2 ---------------------------------------------------------
 // The newer message system: a component tree instead of an embed, opted into
 // per message with the IS_COMPONENTS_V2 flag. Cards migrate one at a time.
@@ -177,6 +145,46 @@ export interface Container {
 }
 
 const text = (content: string): TextDisplay => ({ type: 10, content });
+
+/**
+ * Card for /film and /film-key — one film across the group: poster on top,
+ * one line per rater, the name-vs-name gap line when raters disagree.
+ */
+export function buildFilmCard(
+  comparison: FilmComparison,
+  context: EmbedContext = {},
+): Container {
+  const { displayNames = {} } = context;
+  const name = (username: string) => displayNames[username] ?? username;
+
+  const statLine = [
+    `${comparison.ratings.length} logged`,
+    comparison.average !== null ? `⭐ ${comparison.average} avg` : "",
+    comparison.spread !== null ? `↔️ ${comparison.spread} gap` : "",
+  ]
+    .filter(Boolean)
+    .join("\u2003");
+
+  const gap = biggestGapLine(comparison, name);
+
+  return {
+    type: 17,
+    accent_color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
+    components: [
+      ...(comparison.poster_url
+        ? [{ type: 12 as const, items: [{ media: { url: comparison.poster_url } }] }]
+        : []),
+      text(
+        `## ${filmTitle(comparison)}\n` +
+          `-# [letterboxd.com/film/${comparison.film_key}](https://letterboxd.com/film/${comparison.film_key}/)\n` +
+          `-# ${statLine}`,
+      ),
+      { type: 14 as const, divider: true },
+      text(comparison.ratings.map((r) => ratingLine(r, name)).join("\n")),
+      ...(gap ? [{ type: 14 as const, divider: true }, text(gap)] : []),
+    ],
+  };
+}
 
 /**
  * Card for /stats, as Components V2. One person: their numbers beside their
@@ -331,23 +339,21 @@ function ratingLine(r: UserRating, name: (username: string) => string): string {
 }
 
 /** The two extreme raters, name vs name — shown when the gap threshold trips. */
-function biggestGapField(
-  comparison: FilmComparison | null,
+function biggestGapLine(
+  comparison: FilmComparison,
   name: (username: string) => string,
-): EmbedField | null {
-  if (!comparison?.disagreement || comparison.spread === null) return null;
+): string | null {
+  if (!comparison.disagreement || comparison.spread === null) return null;
 
   const rated = comparison.ratings.filter((r) => r.rating !== null);
   if (rated.length < 2) return null;
   const hi = rated.reduce((a, b) => (b.rating! > a.rating! ? b : a));
   const lo = rated.reduce((a, b) => (b.rating! < a.rating! ? b : a));
 
-  return {
-    name: "⚠️ Biggest gap",
-    value:
-      `**${name(hi.username)}** - ${stars(hi.rating)} vs ` +
-      `**${name(lo.username)}** - ${stars(lo.rating)}`,
-  };
+  return (
+    `⚠️ **${name(hi.username)}** - ${stars(hi.rating)} vs ` +
+    `**${name(lo.username)}** - ${stars(lo.rating)}`
+  );
 }
 
 function truncate(text: string, max: number): string {

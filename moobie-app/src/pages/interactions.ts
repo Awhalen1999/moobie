@@ -13,7 +13,7 @@ import {
   bestFilms,
   buildEntryEmbed,
   buildFavoritesCard,
-  buildFilmEmbed,
+  buildFilmCard,
   buildStatsCard,
   buildSuperlativeCard,
   compareFilm,
@@ -202,7 +202,7 @@ async function filmCard(key: string, notFound?: string): Promise<Response> {
   if (!comparison) {
     return msg(notFound ?? "Nobody's logged that yet.");
   }
-  return embeds(buildFilmEmbed(comparison, { displayNames: await displayNames() }));
+  return components(buildFilmCard(comparison, { displayNames: await displayNames() }));
 }
 
 /**
