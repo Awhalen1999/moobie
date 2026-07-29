@@ -275,11 +275,16 @@ import Layout from "../layouts/Layout.astro";
 
   const touches = (l: Link, n: Node) => l.source === n || l.target === n;
 
+  /** The node driving the dim state: the most recent click wins, so a pinned film beats a person focus. */
+  const focusNode = (): Node | null => (mode === "films" && pinned ? pinned : focused);
+
   const inFocus = (n: Node): boolean => {
-    if (!focused) return true;
-    if (n === focused) return true;
-    if (mode === "people") return links.some((l) => touches(l, n) && touches(l, focused!));
-    return n.kind === "film" && !!n.film?.raters.some((r) => `u:${r.username}` === focused!.id);
+    const sel = focusNode();
+    if (!sel) return true;
+    if (n === sel) return true;
+    if (mode === "people") return links.some((l) => touches(l, n) && touches(l, sel));
+    if (sel.kind === "film") return n.kind === "person" && !!sel.film?.raters.some((r) => `u:${r.username}` === n.id);
+    return n.kind === "film" && !!n.film?.raters.some((r) => `u:${r.username}` === sel.id);
   };
 
   function draw() {
@@ -302,9 +307,10 @@ import Layout from "../layouts/Layout.astro";
       if (dist <= s.r + t.r) continue; // nodes touching - nothing to draw
       const ux = dx / dist;
       const uy = dy / dist;
+      const sel = focusNode();
       const dim =
-        (focused && !(touches(l, focused) || (mode === "films" && inFocus(s) && inFocus(t)))) ||
-        (hovered?.kind === "person" && !touches(l, hovered));
+        (sel && !(touches(l, sel) || (mode === "films" && inFocus(s) && inFocus(t)))) ||
+        (hovered && !touches(l, hovered));
       if (mode === "people") {
         const gap = l.avgGap ?? null;
         const sel = pinnedLink ?? hoveredLink;
