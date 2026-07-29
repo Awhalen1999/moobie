@@ -14,7 +14,7 @@ import {
   buildEntryEmbed,
   buildFavoritesEmbed,
   buildFilmEmbed,
-  buildStatsEmbed,
+  buildStatsCard,
   buildSuperlativeEmbed,
   compareFilm,
   deactivateTrackedUser,
@@ -31,7 +31,9 @@ import {
   getRecentEntries,
   getUserStats,
   insertEntries,
+  IS_COMPONENTS_V2,
   worstFilms,
+  type Container,
   type DiscordEmbed,
   type EmbedContext,
 } from "@moobie/core";
@@ -297,17 +299,16 @@ async function favorite(interaction: Interaction): Promise<Response> {
 /** /stats [username] — one person's numbers, or the whole group's. */
 async function stats(interaction: Interaction): Promise<Response> {
   const username = option(interaction, "username")?.trim().toLowerCase();
-  const names = await displayNames();
 
   if (username) {
     const userStats = await getUserStats(env.DB, username);
     if (!userStats) return msg(`No logs for **${username}** yet.`);
-    return embeds(buildStatsEmbed([userStats], { displayNames: names }));
+    return components(buildStatsCard([userStats], await userContext(username)));
   }
 
   const group = await getGroupStats(env.DB);
   if (group.length === 0) return msg("Nothing logged yet - `/track` someone first.");
-  return embeds(buildStatsEmbed(group, { displayNames: names }));
+  return components(buildStatsCard(group, { displayNames: await displayNames() }));
 }
 
 // --- plumbing ---------------------------------------------------------------
@@ -332,6 +333,11 @@ function msg(content: string): Response {
 
 function embeds(...list: DiscordEmbed[]): Response {
   return json({ type: MESSAGE, data: { embeds: list } });
+}
+
+/** Reply with Components V2 cards — the flag makes the message all-components. */
+function components(...list: Container[]): Response {
+  return json({ type: MESSAGE, data: { flags: IS_COMPONENTS_V2, components: list } });
 }
 
 /** Verify Discord's Ed25519 signature over timestamp + raw body. */

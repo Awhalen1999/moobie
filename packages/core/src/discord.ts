@@ -134,26 +134,110 @@ export function buildFilmEmbed(
   return embed;
 }
 
+// --- Components V2 ---------------------------------------------------------
+// The newer message system: a component tree instead of an embed, opted into
+// per message with the IS_COMPONENTS_V2 flag. Cards migrate one at a time.
+
+/** Message flag that switches a message to the Components V2 system. */
+export const IS_COMPONENTS_V2 = 1 << 15;
+
+interface TextDisplay {
+  type: 10;
+  content: string; // markdown
+}
+
+interface Thumbnail {
+  type: 11;
+  media: { url: string };
+}
+
+/** Text with a thumbnail (or button) docked on the right. */
+interface Section {
+  type: 9;
+  components: TextDisplay[];
+  accessory: Thumbnail;
+}
+
+interface Separator {
+  type: 14;
+  divider?: boolean;
+}
+
+/** Full-width image strip, 1-10 items; a lone image renders at natural size. */
+interface MediaGallery {
+  type: 12;
+  items: { media: { url: string } }[];
+}
+
+/** The V2 equivalent of an embed: a box with an accent strip. */
+export interface Container {
+  type: 17;
+  accent_color?: number;
+  components: (TextDisplay | Section | Separator | MediaGallery)[];
+}
+
+const text = (content: string): TextDisplay => ({ type: 10, content });
+
 /**
- * Card for /stats — one line of numbers per user. A single user gets their
- * name in the title; the group card is titled for the pool.
+ * Card for /stats, as Components V2. One person: their numbers beside their
+ * avatar. The group: a leaderboard ranked by distinct films, biggest first.
  */
-export function buildStatsEmbed(
+export function buildStatsCard(
   stats: UserStats[],
   context: EmbedContext = {},
-): DiscordEmbed {
-  const { displayNames = {} } = context;
+): Container {
+  const { avatarUrl = null, displayNames = {} } = context;
   const name = (username: string) => displayNames[username] ?? username;
 
-  const single = stats.length === 1 ? stats[0]! : null;
+  if (stats.length === 1) {
+    const s = stats[0]!;
+    const header = text(
+      `## ${name(s.username)}\n-# [letterboxd.com/${s.username}](https://letterboxd.com/${s.username}/)`,
+    );
+    const body = text(
+      [
+        `🎬 ${s.films} film${s.films === 1 ? "" : "s"}`,
+        avgStat(s.average),
+        `❤️ ${s.liked} liked`,
+        `🔁 ${s.rewatches} rewatch${s.rewatches === 1 ? "" : "es"}`,
+      ].join("\n"),
+    );
+    return {
+      type: 17,
+      accent_color: COLOR_DEFAULT,
+      components: [
+        ...(avatarUrl ? [{ type: 12 as const, items: [{ media: { url: avatarUrl } }] }] : []),
+        header,
+        { type: 14 as const, divider: true },
+        body,
+      ],
+    };
+  }
+
+  const ranked = [...stats].sort((a, b) => b.films - a.films);
+  const logs = ranked.reduce((sum, s) => sum + s.logs, 0);
+  const rows = ranked.map((s, i) => {
+    const shown = i === 0 ? `**${name(s.username)}**` : name(s.username);
+    return `${i + 1}. ${shown} 🎬 ${s.films} ${avgStat(s.average)} ❤️ ${s.liked}`;
+  });
+
   return {
-    title: single ? `${name(single.username)} - stats` : "moobie stats",
-    description: single
-      ? statsLine(single)
-      : stats.map((s) => `**${name(s.username)}**\n${statsLine(s)}`).join("\n\n"),
-    color: COLOR_DEFAULT,
+    type: 17,
+    accent_color: COLOR_DEFAULT,
+    components: [
+      text(
+        `## moobie stats\n-# ${ranked.length} member${ranked.length === 1 ? "" : "s"} · ` +
+          `${logs} film${logs === 1 ? "" : "s"} logged`,
+      ),
+      { type: 14, divider: true },
+      text(rows.join("\n")),
+    ],
   };
 }
+
+/** "⭐ 3.4 avg" — or "⭐ no ratings" when nothing's rated. */
+const avgStat = (average: number | null) =>
+  average === null ? "⭐ no ratings" : `⭐ ${average} avg`;
 
 /** Card for /best and /worst — every film at one end of a person's ratings. */
 export function buildSuperlativeEmbed(
@@ -249,11 +333,6 @@ function comparisonFields(
 /** One rater's line on a card: name, stars, and their heart if they liked it. */
 function ratingLine(r: UserRating, name: (username: string) => string): string {
   return `**${name(r.username)}** - ${stars(r.rating)}${r.liked ? "\u2003❤️" : ""}`;
-}
-
-function statsLine(s: UserStats): string {
-  const avg = s.average !== null ? `⭐ avg ${s.average}` : "⭐ nothing rated";
-  return [`${s.films} films`, avg, `❤️ ${s.liked}`, `🔁 ${s.rewatches}`].join("\u2003");
 }
 
 /** The two extreme raters, name vs name — shown when the gap threshold trips. */
