@@ -10,24 +10,6 @@ const COLOR_DISAGREEMENT = 0xff8000;
 
 const REVIEW_MAX = 280;
 
-interface EmbedField {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface DiscordEmbed {
-  author?: { name: string; url?: string; icon_url?: string };
-  title?: string;
-  url?: string;
-  description?: string;
-  thumbnail?: { url: string }; // small, top-right
-  image?: { url: string }; // large, full-width
-  fields?: EmbedField[];
-  color: number;
-  footer?: { text: string };
-}
-
 /**
  * Render a rating as emoji stars, e.g. 3.5 -> "⭐ ⭐ ⭐ ½ (3.5)".
  * Null -> "not rated".
@@ -55,51 +37,6 @@ export function displayNameMap(users: TrackedUser[]): Record<string, string> {
 /** "Title (Year)" — or just the title when the year is unknown. */
 export function filmTitle(film: { film_title: string; film_year: number | null }): string {
   return film.film_year ? `${film.film_title} (${film.film_year})` : film.film_title;
-}
-
-/**
- * The announcement for one new log. `comparison` is compareFilm() over every
- * entry for the film; when present, everyone else's ratings show too.
- */
-export function buildEntryEmbed(
-  entry: LogEntry,
-  comparison: FilmComparison | null,
-  context: EmbedContext = {},
-): DiscordEmbed {
-  const { avatarUrl = null, displayNames = {} } = context;
-  const name = (username: string) => displayNames[username] ?? username;
-  const disagreement = comparison?.disagreement ?? false;
-
-  // Em-spaces keep air between the rating, heart, and rewatch marker —
-  // Discord collapses consecutive normal spaces.
-  const rating = [
-    `**${stars(entry.rating)}**`,
-    entry.liked ? "❤️" : "",
-    entry.rewatch ? "🔁" : "",
-  ]
-    .filter(Boolean)
-    .join("\u2003");
-
-  const embed: DiscordEmbed = {
-    author: {
-      name: `${name(entry.username)} logged a film`,
-      url: `https://letterboxd.com/${entry.username}/`,
-      ...(avatarUrl ? { icon_url: avatarUrl } : {}),
-    },
-    title: filmTitle(entry),
-    description: entry.review
-      ? `${rating}\n> ${truncate(entry.review, REVIEW_MAX)}`
-      : rating,
-    color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
-    footer: { text: `Logged ${friendlyDate(entry.watched_date) ?? "recently"}` },
-  };
-  if (entry.link) embed.url = entry.link;
-  if (entry.poster_url) embed.image = { url: entry.poster_url };
-
-  const fields = comparisonFields(entry, comparison, name);
-  if (fields.length > 0) embed.fields = fields;
-
-  return embed;
 }
 
 // --- Components V2 ---------------------------------------------------------
@@ -145,6 +82,67 @@ export interface Container {
 }
 
 const text = (content: string): TextDisplay => ({ type: 10, content });
+
+/**
+ * The announcement for one new log, and the /review card. `comparison` is
+ * compareFilm() over every entry for the film; when present, everyone else's
+ * ratings show too.
+ */
+export function buildEntryCard(
+  entry: LogEntry,
+  comparison: FilmComparison | null,
+  context: EmbedContext = {},
+): Container {
+  const { displayNames = {} } = context;
+  const name = (username: string) => displayNames[username] ?? username;
+  const disagreement = comparison?.disagreement ?? false;
+
+  // Em-spaces keep air between the rating, heart, and rewatch marker —
+  // Discord collapses consecutive normal spaces.
+  const rating = [
+    `**${stars(entry.rating)}**`,
+    entry.liked ? "❤️" : "",
+    entry.rewatch ? "🔁" : "",
+  ]
+    .filter(Boolean)
+    .join("\u2003");
+
+  // The review's URL, shown the way the film card shows its link.
+  const reviewLink = entry.link
+    ? `\n-# [${entry.link.replace(/^https?:\/\//, "").replace(/\/$/, "")}](${entry.link})`
+    : "";
+
+  const header = text(
+    `**[${name(entry.username)}](https://letterboxd.com/${entry.username}/) logged a film**\n` +
+      `## [${filmTitle(entry)}](https://letterboxd.com/film/${entry.film_key}/)${reviewLink}\n${rating}` +
+      (entry.review ? `\n> ${truncate(entry.review, REVIEW_MAX)}` : ""),
+  );
+
+  const others = comparison?.ratings.filter((r) => r.username !== entry.username) ?? [];
+
+  return {
+    type: 17,
+    accent_color: disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
+    components: [
+      header,
+      ...(entry.poster_url
+        ? [
+            { type: 14 as const, divider: true },
+            { type: 12 as const, items: [{ media: { url: entry.poster_url } }] },
+          ]
+        : []),
+      ...(others.length > 0
+        ? [
+            { type: 14 as const, divider: true },
+            text(`**Other reviews**\n${others.map((r) => ratingLine(r, name)).join("\n")}`),
+          ]
+        : []),
+      { type: 14 as const, divider: true },
+      text(`-# Logged ${friendlyDate(entry.watched_date) ?? "recently"}`),
+    ],
+  };
+}
+
 
 /**
  * Card for /film and /film-key — one film across the group: poster on top,
@@ -313,25 +311,6 @@ function filmListCard(heading: string, films: LogEntry[], tally: string): Contai
 }
 
 // --- helpers -------------------------------------------------------------
-
-/** The "Other reviews" field — how everyone else rated this film. */
-function comparisonFields(
-  entry: LogEntry,
-  comparison: FilmComparison | null,
-  name: (username: string) => string,
-): EmbedField[] {
-  if (!comparison) return [];
-
-  const others = comparison.ratings.filter((r) => r.username !== entry.username);
-  if (others.length === 0) return [];
-
-  return [
-    {
-      name: "Other reviews",
-      value: others.map((r) => ratingLine(r, name)).join("\n"),
-    },
-  ];
-}
 
 /** One rater's line on a card: name, stars, and their heart if they liked it. */
 function ratingLine(r: UserRating, name: (username: string) => string): string {

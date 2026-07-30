@@ -7,7 +7,7 @@
 // URL. Run it locally with `wrangler dev --test-scheduled`.
 
 import {
-  buildEntryEmbed,
+  buildEntryCard,
   compareFilm,
   compareRecency,
   countEntriesForUser,
@@ -17,8 +17,9 @@ import {
   getEntriesByFilmKey,
   getRecentEntries,
   insertEntries,
+  IS_COMPONENTS_V2,
   setUserAvatar,
-  type DiscordEmbed,
+  type Container,
   type EmbedContext,
   type LogEntry,
   type ParsedEntry,
@@ -118,10 +119,10 @@ async function announce(
   entry: LogEntry,
   context: EmbedContext,
 ): Promise<number> {
-  let embed;
+  let card;
   try {
     const filmEntries = await getEntriesByFilmKey(env.DB, entry.film_key);
-    embed = buildEntryEmbed(entry, compareFilm(filmEntries), context);
+    card = buildEntryCard(entry, compareFilm(filmEntries), context);
   } catch (err) {
     console.error(`moobie-poll: comparison failed for ${entry.guid}:`, err);
     return 0;
@@ -130,7 +131,7 @@ async function announce(
   let posted = 0;
   for (const channelId of announceChannels(env)) {
     try {
-      await sendChannelMessage(env.DISCORD_BOT_TOKEN, channelId, embed);
+      await sendChannelMessage(env.DISCORD_BOT_TOKEN, channelId, card);
       posted++;
     } catch (err) {
       // The row is already saved; log the miss and keep going.
@@ -150,21 +151,21 @@ function announceChannels(env: Env): string[] {
 const API_BASE = "https://discord.com/api/v10";
 
 /**
- * POST one embed to a channel as the bot. A burst of announcements can trip
+ * POST one card to a channel as the bot. A burst of announcements can trip
  * Discord's rate limit; the 429 says how long to wait, so wait and retry once.
  * Throws if the response still isn't OK.
  */
 async function sendChannelMessage(
   botToken: string,
   channelId: string,
-  embed: DiscordEmbed,
+  card: Container,
 ): Promise<void> {
-  let res = await postEmbed(botToken, channelId, embed);
+  let res = await postCard(botToken, channelId, card);
   if (res.status === 429) {
     const body = (await res.json().catch(() => null)) as { retry_after?: number } | null;
     const waitMs = Math.min(Math.max(body?.retry_after ?? 1, 0) * 1000, 10_000);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
-    res = await postEmbed(botToken, channelId, embed);
+    res = await postCard(botToken, channelId, card);
   }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -172,10 +173,10 @@ async function sendChannelMessage(
   }
 }
 
-function postEmbed(
+function postCard(
   botToken: string,
   channelId: string,
-  embed: DiscordEmbed,
+  card: Container,
 ): Promise<Response> {
   return fetch(`${API_BASE}/channels/${channelId}/messages`, {
     method: "POST",
@@ -183,6 +184,6 @@ function postEmbed(
       Authorization: `Bot ${botToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ embeds: [embed] }),
+    body: JSON.stringify({ flags: IS_COMPONENTS_V2, components: [card] }),
   });
 }

@@ -11,7 +11,7 @@ import { env as workerEnv, waitUntil } from "cloudflare:workers";
 import {
   addTrackedUser,
   bestFilms,
-  buildEntryEmbed,
+  buildEntryCard,
   buildFavoritesCard,
   buildFilmCard,
   buildStatsCard,
@@ -34,7 +34,6 @@ import {
   IS_COMPONENTS_V2,
   worstFilms,
   type Container,
-  type DiscordEmbed,
   type EmbedContext,
 } from "@moobie/core";
 
@@ -243,7 +242,7 @@ async function reviewCard(
     return msg(`**${username}** hasn't logged **${filmTitle(comparison)}**.`);
   }
 
-  return embeds(buildEntryEmbed(latest, comparison, await userContext(username)));
+  return components(buildEntryCard(latest, comparison, await userContext(username)));
 }
 
 /** Shared miss copy for the title-search commands (/film, /review). */
@@ -329,10 +328,6 @@ async function userContext(username: string): Promise<EmbedContext> {
 
 function msg(content: string): Response {
   return json({ type: MESSAGE, data: { content } });
-}
-
-function embeds(...list: DiscordEmbed[]): Response {
-  return json({ type: MESSAGE, data: { embeds: list } });
 }
 
 /** Reply with Components V2 cards — the flag makes the message all-components. */
