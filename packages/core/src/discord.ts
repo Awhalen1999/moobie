@@ -83,6 +83,21 @@ export interface Container {
 
 const text = (content: string): TextDisplay => ({ type: 10, content });
 
+// The site watermark, closing every card. A markdown link so it's clickable.
+const SITE_LINK = "[moobie.awln.dev](https://moobie.awln.dev)";
+
+/**
+ * Close a card with a divider and the watermark as its own subtext block.
+ * The entry card skips this — its date footer already sits under a divider
+ * and carries the watermark on the same line instead.
+ */
+function withSiteFooter(card: Container): Container {
+  return {
+    ...card,
+    components: [...card.components, { type: 14, divider: true }, text(`-# ${SITE_LINK}`)],
+  };
+}
+
 /**
  * The announcement for one new log, and the /review card. `comparison` is
  * compareFilm() over every entry for the film; when present, everyone else's
@@ -138,7 +153,7 @@ export function buildEntryCard(
           ]
         : []),
       { type: 14 as const, divider: true },
-      text(`-# Logged ${friendlyDate(entry.watched_date) ?? "recently"}`),
+      text(`-# Logged ${friendlyDate(entry.watched_date) ?? "recently"}\n-# ${SITE_LINK}`),
     ],
   };
 }
@@ -165,7 +180,7 @@ export function buildFilmCard(
 
   const gap = biggestGapLine(comparison, name);
 
-  return {
+  return withSiteFooter({
     type: 17,
     accent_color: comparison.disagreement ? COLOR_DISAGREEMENT : COLOR_DEFAULT,
     components: [
@@ -181,7 +196,7 @@ export function buildFilmCard(
       text(comparison.ratings.map((r) => ratingLine(r, name)).join("\n")),
       ...(gap ? [{ type: 14 as const, divider: true }, text(gap)] : []),
     ],
-  };
+  });
 }
 
 /**
@@ -208,7 +223,7 @@ export function buildStatsCard(
         `🔁 ${s.rewatches} rewatch${s.rewatches === 1 ? "" : "es"}`,
       ].join("\n"),
     );
-    return {
+    return withSiteFooter({
       type: 17,
       accent_color: COLOR_DEFAULT,
       components: [
@@ -217,7 +232,7 @@ export function buildStatsCard(
         { type: 14 as const, divider: true },
         body,
       ],
-    };
+    });
   }
 
   const ranked = [...stats].sort((a, b) => b.films - a.films);
@@ -227,7 +242,7 @@ export function buildStatsCard(
     return `${i + 1}. ${shown} 🎬 ${s.films} ${avgStat(s.average)} ❤️ ${s.liked}`;
   });
 
-  return {
+  return withSiteFooter({
     type: 17,
     accent_color: COLOR_DEFAULT,
     components: [
@@ -238,7 +253,7 @@ export function buildStatsCard(
       { type: 14, divider: true },
       text(rows.join("\n")),
     ],
-  };
+  });
 }
 
 /** "⭐ 3.4 avg" — or "⭐ no ratings" when nothing's rated. */
@@ -294,7 +309,7 @@ function filmListCard(heading: string, films: LogEntry[], tally: string): Contai
   const more = films.length - LIST_MAX;
   if (more > 0) lines.push(`-# + ${more} more`);
 
-  return {
+  return withSiteFooter({
     type: 17,
     accent_color: COLOR_DEFAULT,
     components: [
@@ -307,7 +322,7 @@ function filmListCard(heading: string, films: LogEntry[], tally: string): Contai
         : []),
       text(lines.join("\n")),
     ],
-  };
+  });
 }
 
 // --- helpers -------------------------------------------------------------
