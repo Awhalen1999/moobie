@@ -212,7 +212,10 @@ import Layout from "../layouts/Layout.astro";
   }
 
   /* Checkbox drawn as the theme switch's twin: same bordered box, the inner
-     ink square shows when checked. */
+     ink square shows when checked. Unlike the switch (a button), this is an
+     <input> — Safari renders neither ::before nor display:grid on form
+     controls, so the box sizes itself and the inner square is an inset ring
+     of paper over an ink fill. Same 0.7rem / 0.35rem geometry either way. */
   .check {
     display: flex;
     align-items: center;
@@ -222,22 +225,19 @@ import Layout from "../layouts/Layout.astro";
   }
   .check input {
     appearance: none;
-    display: grid;
-    place-items: center;
+    flex: none; /* the bar's wrap must never squash it to a sliver */
+    box-sizing: content-box;
+    width: 0.7rem;
+    height: 0.7rem;
     margin: 0;
     padding: 0.35rem;
     background: var(--paper);
     border: 1px solid var(--ink);
     cursor: pointer;
   }
-  .check input::before {
-    content: "";
-    display: block;
-    width: 0.7rem;
-    height: 0.7rem;
-  }
-  .check input:checked::before {
+  .check input:checked {
     background: var(--ink);
+    box-shadow: inset 0 0 0 0.35rem var(--paper);
   }
 
   .grid {
