@@ -13,9 +13,9 @@
   "vars": {
     // Where announcements go: comma-separated channel ids (one data pool,
     // broadcast to N channels — can span servers). Currently moobie's home
-    // server. Not a secret — the one secret (DISCORD_BOT_TOKEN) goes in via
-    // `wrangler secret put`.
-    "DISCORD_ANNOUNCE_CHANNEL_IDS": "1528009127505301716"
+    // server + CompSci Bois. Not a secret — the one secret (DISCORD_BOT_TOKEN)
+    // goes in via `wrangler secret put`.
+    "DISCORD_ANNOUNCE_CHANNEL_IDS": "1528009127505301716,672192745426780204"
   },
   "d1_databases": [
     {
