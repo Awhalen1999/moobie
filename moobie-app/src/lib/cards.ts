@@ -23,6 +23,10 @@ export interface Person {
   avatarUrl: string | null;
 }
 
+// Letterboxd's stock grey avatar — the same one members who never set a photo
+// already carry, so missing/broken pfps blend in instead of rendering blank.
+export const DEFAULT_AVATAR_URL = "https://s.ltrbxd.com/static/img/avatar1000-BdGBhe59.png";
+
 export const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 

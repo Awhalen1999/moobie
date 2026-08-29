@@ -5,6 +5,7 @@
 import type { APIRoute } from "astro";
 import { env as workerEnv } from "cloudflare:workers";
 import { compareFilm, getActiveUsers, getAllEntries, type LogEntry } from "@moobie/core";
+import { DEFAULT_AVATAR_URL } from "../../lib/cards";
 
 export const prerender = false;
 
@@ -50,7 +51,7 @@ export const GET: APIRoute = async () => {
   const people = users.map((u) => ({
     username: u.username,
     name: u.display_name ?? u.username,
-    avatarUrl: u.avatar_url,
+    avatarUrl: u.avatar_url ?? DEFAULT_AVATAR_URL,
   }));
 
   const logs = entries.filter((e) => active.has(e.username)).length;

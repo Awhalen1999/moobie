@@ -38,7 +38,7 @@ import Layout from "../layouts/Layout.astro";
     forceY,
   } from "d3-force";
 
-  import { esc, num, gapClass, filmCardHtml, type Film, type Person } from "../lib/cards";
+  import { esc, num, gapClass, filmCardHtml, DEFAULT_AVATAR_URL, type Film, type Person } from "../lib/cards";
 
   interface Payload {
     people: Person[];
@@ -515,7 +515,7 @@ import Layout from "../layouts/Layout.astro";
     const shared = mine.filter((f) => f.raters.length >= 2).length;
     const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100 : null;
     panel.innerHTML =
-      (p.avatarUrl ? `<img class="poster" src="${esc(p.avatarUrl)}" alt="" loading="lazy" />` : "") +
+      `<img class="poster" src="${esc(p.avatarUrl ?? DEFAULT_AVATAR_URL)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_URL}'" />` +
       `<h3 class="person-name">${esc(p.name.toLowerCase())}</h3>` +
       `<div class="row"><span class="mono">films</span><span class="mono">${mine.length}</span></div>` +
       `<div class="row"><span class="mono">shared</span><span class="mono">${shared}</span></div>` +
@@ -529,11 +529,9 @@ import Layout from "../layouts/Layout.astro";
 
   const PAIR_LIST_MAX = 12;
 
-  /** A small square avatar for pair cards; a faint block when there's none. */
+  /** A small square avatar for pair cards; the stock grey when there's none. */
   const mini = (p: Person) =>
-    p.avatarUrl
-      ? `<img class="mini" src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" loading="lazy" />`
-      : `<span class="mini"></span>`;
+    `<img class="mini" src="${esc(p.avatarUrl ?? DEFAULT_AVATAR_URL)}" alt="${esc(p.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_URL}'" />`;
 
   /**
    * The pair card: both pfps and names, the pair's numbers, then the shared
@@ -620,6 +618,11 @@ import Layout from "../layouts/Layout.astro";
       const img = new Image();
       img.src = p.avatarUrl;
       img.onload = () => draw();
+      // A dead URL falls back to the stock grey; the src check keeps a failing
+      // stock image from retrying itself forever.
+      img.onerror = () => {
+        if (img.src !== DEFAULT_AVATAR_URL) img.src = DEFAULT_AVATAR_URL;
+      };
       avatars.set(p.username, img);
     }
 

@@ -210,14 +210,22 @@ export async function deactivateTrackedUser(
   return result.meta.changes > 0;
 }
 
-/** Store a user's Letterboxd avatar URL (fetched lazily by the poll). */
-export async function setUserAvatar(
+/**
+ * Record an avatar check: stamp the time, and store the URL when one was
+ * found. A null URL (fetch failed) keeps the existing avatar; the stamp still
+ * advances so a broken profile waits out the TTL instead of retrying every tick.
+ */
+export async function recordAvatarCheck(
   db: D1Database,
   username: string,
-  avatarUrl: string,
+  avatarUrl: string | null,
 ): Promise<void> {
   await db
-    .prepare("UPDATE tracked_users SET avatar_url = ? WHERE username = ?")
-    .bind(avatarUrl, username)
+    .prepare(
+      `UPDATE tracked_users
+       SET avatar_url = COALESCE(?, avatar_url), avatar_checked_at = ?
+       WHERE username = ?`,
+    )
+    .bind(avatarUrl, new Date().toISOString(), username)
     .run();
 }

@@ -18,7 +18,7 @@ import {
   getRecentEntries,
   insertEntries,
   IS_COMPONENTS_V2,
-  setUserAvatar,
+  recordAvatarCheck,
   type Container,
   type EmbedContext,
   type LogEntry,
@@ -54,7 +54,8 @@ async function poll(env: Env): Promise<PollSummary> {
   const displayNames = displayNameMap(users);
 
   for (const user of users) {
-    const result = await pollUser(env, user, displayNames);
+    const avatarUrl = await refreshAvatar(env.DB, user);
+    const result = await pollUser(env, user, displayNames, avatarUrl);
     summary.inserted += result.inserted;
     summary.announced += result.announced;
     if (result.seeded) summary.seeded.push(user.username);
@@ -72,6 +73,7 @@ async function pollUser(
   env: Env,
   user: TrackedUser,
   displayNames: Record<string, string>,
+  avatarUrl: string | null,
 ): Promise<UserResult> {
   const username = user.username;
 
@@ -94,7 +96,6 @@ async function pollUser(
   }
 
   // Post oldest first, so the channels read in the order films were watched.
-  const avatarUrl = await ensureAvatar(env.DB, user);
   let announced = 0;
   for (const entry of [...inserted].sort(compareRecency)) {
     announced += await announce(env, entry, { avatarUrl, displayNames });
@@ -102,15 +103,21 @@ async function pollUser(
   return { inserted: inserted.length, announced, seeded: false };
 }
 
+// Avatars go stale when someone changes their pfp (the old CDN URL 404s), so
+// re-check daily rather than only when the row is empty.
+const AVATAR_TTL_MS = 24 * 60 * 60 * 1000;
+
 /**
- * The user's Letterboxd pfp, fetched once and then served from the DB.
- * Null if the fetch fails (retried next time) — avatars are cosmetic.
+ * The user's Letterboxd pfp, re-scraped at most once per AVATAR_TTL_MS.
+ * A failed fetch keeps the stored URL and still counts as a check — avatars
+ * are cosmetic, not worth retrying every tick.
  */
-async function ensureAvatar(db: D1Database, user: TrackedUser): Promise<string | null> {
-  if (user.avatar_url) return user.avatar_url;
+async function refreshAvatar(db: D1Database, user: TrackedUser): Promise<string | null> {
+  const checkedAt = user.avatar_checked_at ? Date.parse(user.avatar_checked_at) : 0;
+  if (Date.now() - checkedAt < AVATAR_TTL_MS) return user.avatar_url;
   const fetched = await getAvatarUrl(user.username);
-  if (fetched) await setUserAvatar(db, user.username, fetched);
-  return fetched;
+  await recordAvatarCheck(db, user.username, fetched);
+  return fetched ?? user.avatar_url;
 }
 
 /** Announce one entry to every configured channel. Returns how many posts landed. */

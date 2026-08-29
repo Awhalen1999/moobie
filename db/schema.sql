@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS tracked_users (
   username        TEXT PRIMARY KEY,   -- Letterboxd username, lowercased — the identity everywhere
   discord_id      TEXT,               -- for @mentions; nullable
   display_name    TEXT,               -- friendly name for cards, display-only; nullable
-  avatar_url      TEXT,               -- Letterboxd pfp; fetched lazily, nullable
+  avatar_url      TEXT,               -- Letterboxd pfp; refreshed daily by the poll, nullable
+  avatar_checked_at TEXT,             -- ISO timestamp of the last pfp check; null forces a refresh
   active          INTEGER NOT NULL DEFAULT 1,  -- 1/0 soft-disable
   added_at        TEXT NOT NULL       -- ISO timestamp
 );

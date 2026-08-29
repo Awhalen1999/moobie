@@ -47,6 +47,7 @@ export interface TrackedUser {
   discord_id: string | null;
   display_name: string | null; // display-only; username is the identity everywhere
   avatar_url: string | null;
+  avatar_checked_at: string | null; // ISO timestamp of the last pfp check
   active: number; // 0 | 1
   added_at: string;
 }
