@@ -39,20 +39,28 @@ export async function getRecentEntries(username: string): Promise<ParsedEntry[]>
 }
 
 /**
- * Best-effort avatar, from the profile page's og:image tag (the feed carries
- * none). Null on any failure — avatars are nice-to-have.
+ * Best-effort avatar (the feed carries none). The profile root sits behind a
+ * bot challenge (403) as of Aug 2026, but /films/ doesn't and shows the same
+ * pfp in its header — so scrape the <img> there. Not og:image: on subpages
+ * that's a generic share card. Null on any failure — avatars are nice-to-have.
  */
 export async function getAvatarUrl(username: string): Promise<string | null> {
   try {
-    const res = await fetch(`${RSS_BASE}/${username}/`, {
+    const res = await fetch(`${RSS_BASE}/${username}/films/`, {
       headers: { "User-Agent": "moobie (https://moobie.awln.dev)" },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const html = await res.text();
+    // A custom pfp is an a.ltrbxd.com crop served tiny (48px); the CDN
+    // resizes on demand, so ask for the size the old og:image scrape gave.
+    // No custom pfp means the static default png (hashed name, one size).
+    const custom = html.match(
+      /<img[^>]*src="(https:\/\/a\.ltrbxd\.com\/resized\/avatar\/[^"]+)"/,
+    )?.[1];
+    if (custom) return custom.replace("-0-48-0-48-", "-0-1000-0-1000-");
     return (
-      html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/)?.[1] ??
-      html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/)?.[1] ??
+      html.match(/<img[^>]*src="(https:\/\/s\.ltrbxd\.com\/static\/img\/avatar[^"]+)"/)?.[1] ??
       null
     );
   } catch {
