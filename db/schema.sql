@@ -43,11 +43,12 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_username ON log_entries(username, wat
 -- alphanumerics (same as /film search), so several people reccing one film
 -- stack on it, and the same person reccing it twice is a no-op.
 CREATE TABLE IF NOT EXISTS recommendations (
-  id            INTEGER PRIMARY KEY,
-  title         TEXT NOT NULL,         -- as this person typed it
-  title_key     TEXT NOT NULL,         -- normalized title; groups everyone's recs of one film
-  discord_id    TEXT NOT NULL,         -- who recommended it; the stable identity
-  discord_name  TEXT NOT NULL,         -- their name at the time: nick > display name > username
-  created_at    TEXT NOT NULL,         -- ISO timestamp
+  id                INTEGER PRIMARY KEY,
+  title             TEXT NOT NULL,     -- as this person typed it
+  title_key         TEXT NOT NULL,     -- normalized title; groups everyone's recs of one film
+  discord_id        TEXT NOT NULL,     -- who recommended it; the one identity that never changes
+  discord_name      TEXT NOT NULL,     -- what they were called at the time: nick > display name > username
+  discord_username  TEXT NOT NULL,     -- their @handle at the time; shown in brackets after the name
+  created_at        TEXT NOT NULL,     -- ISO timestamp
   UNIQUE (title_key, discord_id)       -- one rec per film per person
 );

@@ -32,6 +32,7 @@ import {
   getGroupStats,
   getRecentEntries,
   getRecommendations,
+  getRecommendationsByKey,
   getUserStats,
   insertEntries,
   groupRecs,
@@ -42,6 +43,7 @@ import {
   worstFilms,
   type Container,
   type EmbedContext,
+  type Recommendation,
   type Recommender,
 } from "@moobie/core";
 
@@ -342,16 +344,18 @@ async function stats(interaction: Interaction): Promise<Response> {
  */
 async function rec(interaction: Interaction): Promise<Response> {
   const title = recTitle(interaction);
-  if (!normalizeTitle(title)) return msg("Title required.");
+  const key = normalizeTitle(title);
+  if (!key) return msg("Title required.");
 
   const by = caller(interaction);
   if (!by) return msg("Unknown user.");
 
-  const { film, added } = await addRecommendation(env.DB, title, by);
+  const added = await addRecommendation(env.DB, { title, title_key: key, ...by });
+  const film = groupRecs(await getRecommendationsByKey(env.DB, key))[0]!;
   if (!added) return msg(`Already recommended **${film.title}**.`);
 
-  // Names run oldest first, so the caller is last; the rest already had it.
-  const others = film.names.slice(0, -1);
+  // Recommenders run oldest first, so the caller is last; the rest already had it.
+  const others = film.recommenders.slice(0, -1);
   return msg(
     others.length === 0
       ? `Added **${film.title}**.`
@@ -369,12 +373,13 @@ async function recFilm(): Promise<Response> {
 /** /unrec <title> — take your own rec of a film off the list. Only yours. */
 async function unrec(interaction: Interaction): Promise<Response> {
   const title = recTitle(interaction);
-  if (!normalizeTitle(title)) return msg("Title required.");
+  const key = normalizeTitle(title);
+  if (!key) return msg("Title required.");
 
   const by = caller(interaction);
   if (!by) return msg("Unknown user.");
 
-  const removed = await removeRecommendation(env.DB, title, by.discordId);
+  const removed = await removeRecommendation(env.DB, key, by.discord_id);
   return msg(removed ? `Removed **${title}**.` : `**${title}** is not on your recommendations.`);
 }
 
@@ -385,13 +390,16 @@ function recTitle(interaction: Interaction): string {
   return option(interaction, "title")?.trim().replace(/\s+/g, " ") ?? "";
 }
 
-/** Who ran the command: their id, and the name they go by where they ran it. */
-function caller(interaction: Interaction): Recommender | null {
+/** Who ran the command: their id, the name they go by where they ran it, and their @handle. */
+function caller(
+  interaction: Interaction,
+): (Recommender & Pick<Recommendation, "discord_id">) | null {
   const user = interaction.member?.user ?? interaction.user;
   if (!user) return null;
   return {
-    discordId: user.id,
-    discordName: interaction.member?.nick || user.global_name || user.username,
+    discord_id: user.id,
+    discord_name: interaction.member?.nick || user.global_name || user.username,
+    discord_username: user.username,
   };
 }
 

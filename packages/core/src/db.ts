@@ -2,12 +2,10 @@
 // binding as its first argument. Writes are INSERT OR IGNORE on a unique key,
 // so re-ingesting the same entry is a no-op.
 
-import { groupRecs, normalizeTitle } from "./analytics.ts";
 import type {
   FilmCatalogEntry,
   LogEntry,
   ParsedEntry,
-  RecFilm,
   Recommendation,
   TrackedUser,
   UserStats,
@@ -235,36 +233,45 @@ export async function recordAvatarCheck(
 
 // --- recommendations ---------------------------------------------------------
 
-/** Who ran /rec, straight from the signed interaction. */
-export interface Recommender {
-  discordId: string;
-  discordName: string;
-}
+/** A rec ready to INSERT: the film as typed, its key, and who's recommending it. */
+export type NewRecommendation = Omit<Recommendation, "id" | "created_at">;
 
 /**
- * Add a recommendation. One row per film per person, so the same person
- * reccing a film twice is a no-op: `added` says which, and `film` is the film
- * with everyone who wants it either way.
+ * Add a recommendation. One row per film per person (UNIQUE on title_key +
+ * discord_id), so the same person again is a no-op. True if a row was added.
  */
 export async function addRecommendation(
   db: D1Database,
-  title: string,
-  by: Recommender,
-): Promise<{ film: RecFilm; added: boolean }> {
-  const titleKey = normalizeTitle(title);
+  rec: NewRecommendation,
+): Promise<boolean> {
   const result = await db
     .prepare(
-      `INSERT OR IGNORE INTO recommendations (title, title_key, discord_id, discord_name, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO recommendations
+         (title, title_key, discord_id, discord_name, discord_username, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .bind(title, titleKey, by.discordId, by.discordName, new Date().toISOString())
+    .bind(
+      rec.title,
+      rec.title_key,
+      rec.discord_id,
+      rec.discord_name,
+      rec.discord_username,
+      new Date().toISOString(),
+    )
     .run();
-  const rows = await db
+  return result.meta.changes === 1;
+}
+
+/** Every rec of one film, oldest first. */
+export function getRecommendationsByKey(
+  db: D1Database,
+  titleKey: string,
+): Promise<Recommendation[]> {
+  return db
     .prepare("SELECT * FROM recommendations WHERE title_key = ? ORDER BY created_at, id")
     .bind(titleKey)
     .all<Recommendation>()
     .then((r) => r.results);
-  return { film: groupRecs(rows)[0]!, added: result.meta.changes === 1 };
 }
 
 /** Every rec row, oldest first — groupRecs() turns them into films. */
@@ -278,12 +285,12 @@ export function getRecommendations(db: D1Database): Promise<Recommendation[]> {
 /** Remove one person's rec of a film. False if they hadn't recommended it. */
 export async function removeRecommendation(
   db: D1Database,
-  title: string,
+  titleKey: string,
   discordId: string,
 ): Promise<boolean> {
   const result = await db
     .prepare("DELETE FROM recommendations WHERE title_key = ? AND discord_id = ?")
-    .bind(normalizeTitle(title), discordId)
+    .bind(titleKey, discordId)
     .run();
   return result.meta.changes > 0;
 }

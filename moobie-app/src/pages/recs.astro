@@ -12,7 +12,11 @@ export const prerender = false;
 
 const env = workerEnv as unknown as { DB: D1Database };
 const recs = groupRecs(await getRecommendations(env.DB));
-const people = [...new Set(recs.flatMap((r) => r.names))].sort((a, b) => a.localeCompare(b));
+// Everyone who has recommended something, once each, keyed by username.
+const people = [...new Map(recs.flatMap((r) => r.recommenders).map((p) => [p.discord_username, p])).values()]
+  .sort((a, b) => a.discord_name.localeCompare(b.discord_name));
+const label = (p: { discord_name: string; discord_username: string }) =>
+  `${p.discord_name} (${p.discord_username})`;
 
 // "2026-05-25T…" -> "May 25, 2026"
 const when = (iso: string) =>
@@ -34,7 +38,7 @@ const when = (iso: string) =>
       </select>
       <select id="who" class="select mono" aria-label="Filter by person">
         <option value="">everyone</option>
-        {people.map((name) => <option value={name}>{name}</option>)}
+        {people.map((p) => <option value={p.discord_username}>{label(p)}</option>)}
       </select>
     </header>
     {
@@ -43,7 +47,7 @@ const when = (iso: string) =>
       ) : (
         <ol class="list" id="list">
           {recs.map((r, i) => (
-            <li class="rec" data-i={i} data-title={r.title} data-at={r.first_at} data-names={JSON.stringify(r.names)}>
+            <li class="rec" data-i={i} data-title={r.title} data-at={r.first_at} data-usernames={JSON.stringify(r.recommenders.map((p) => p.discord_username))}>
               <a
                 class="display title"
                 href={`https://letterboxd.com/search/films/${encodeURIComponent(r.title)}/`}
@@ -51,7 +55,7 @@ const when = (iso: string) =>
               >
                 {r.title}
               </a>
-              <span class="mono">{r.names.join(" · ")}</span>
+              <span class="mono">{r.recommenders.map(label).join(" · ")}</span>
               <span class="mono muted">{when(r.first_at)}</span>
             </li>
           ))}
@@ -83,7 +87,7 @@ const when = (iso: string) =>
     const q = norm(search.value);
     const shown = rows
       .filter((r) => !q || norm(r.dataset.title!).includes(q))
-      .filter((r) => !who.value || (JSON.parse(r.dataset.names!) as string[]).includes(who.value))
+      .filter((r) => !who.value || (JSON.parse(r.dataset.usernames!) as string[]).includes(who.value))
       .sort(sorters[sort.value] ?? sorters.wanted!);
     for (const r of rows) r.hidden = true;
     for (const r of shown) r.hidden = false;

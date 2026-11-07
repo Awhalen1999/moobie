@@ -2,7 +2,7 @@
 // no I/O. Sending lives with the poll Worker.
 
 import type { FilmComparison, Superlative, UserRating } from "./analytics.ts";
-import type { LogEntry, RecFilm, TrackedUser, UserStats } from "./types.ts";
+import type { LogEntry, RecFilm, Recommender, TrackedUser, UserStats } from "./types.ts";
 
 // Letterboxd's palette: green normally, orange when raters disagree.
 const COLOR_DEFAULT = 0x00e054;
@@ -339,15 +339,15 @@ export function buildRecCard(film: RecFilm): Container {
       text(`## ${film.title}\n-# [find it on letterboxd](${search})`),
       { type: 14, divider: true },
       text(
-        `Recommended by ${listNames(film.names)}\n-# ${friendlyDate(film.first_at) ?? film.first_at.slice(0, 10)}`,
+        `Recommended by ${listNames(film.recommenders)}\n-# ${friendlyDate(film.first_at) ?? film.first_at.slice(0, 10)}`,
       ),
     ],
   });
 }
 
-/** Names, bold, comma-separated: "**a**, **b**, **c**". */
-export function listNames(names: string[]): string {
-  return names.map((n) => `**${n}**`).join(", ");
+/** People as "**name** (username)", comma-separated. */
+export function listNames(people: Recommender[]): string {
+  return people.map((p) => `**${p.discord_name}** (${p.discord_username})`).join(", ");
 }
 
 // --- helpers -------------------------------------------------------------
