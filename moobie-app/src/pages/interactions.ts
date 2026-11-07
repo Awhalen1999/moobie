@@ -9,11 +9,13 @@
 import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
 import {
+  addRecommendation,
   addTrackedUser,
   bestFilms,
   buildEntryCard,
   buildFavoritesCard,
   buildFilmCard,
+  buildRecCard,
   buildStatsCard,
   buildSuperlativeCard,
   compareFilm,
@@ -29,12 +31,18 @@ import {
   getFilmCatalog,
   getGroupStats,
   getRecentEntries,
+  getRecommendations,
   getUserStats,
   insertEntries,
+  groupRecs,
   IS_COMPONENTS_V2,
+  listNames,
+  normalizeTitle,
+  removeRecommendation,
   worstFilms,
   type Container,
   type EmbedContext,
+  type Recommender,
 } from "@moobie/core";
 
 export const prerender = false;
@@ -53,10 +61,20 @@ interface Env {
 
 const env = workerEnv as unknown as Env;
 
+interface DiscordUser {
+  id: string;
+  username: string;
+  global_name: string | null;
+}
+
 interface Interaction {
   type: number;
   application_id: string;
   token: string;
+  // Who ran the command, as Discord says - the body is signed, so this is
+  // trustworthy. `member` in a server (with their nickname), `user` in a DM.
+  member?: { nick?: string | null; user: DiscordUser };
+  user?: DiscordUser;
   data?: {
     name: string;
     options?: { name: string; value: string }[];
@@ -102,6 +120,12 @@ export const POST: APIRoute = async ({ request }) => {
         return favorite(interaction);
       case "stats":
         return stats(interaction);
+      case "rec":
+        return rec(interaction);
+      case "rec-film":
+        return recFilm();
+      case "unrec":
+        return unrec(interaction);
     }
   }
 
@@ -310,7 +334,66 @@ async function stats(interaction: Interaction): Promise<Response> {
   return components(buildStatsCard(group, { displayNames: await displayNames() }));
 }
 
+/**
+ * /rec <title> — put a film on the pool's recs. The recommender is whoever
+ * ran the command; nobody types a name. One rec per film per person: a second
+ * person stacks on the film, the same person again is a no-op. Replies are
+ * flat statements - no voice.
+ */
+async function rec(interaction: Interaction): Promise<Response> {
+  const title = recTitle(interaction);
+  if (!normalizeTitle(title)) return msg("Title required.");
+
+  const by = caller(interaction);
+  if (!by) return msg("Unknown user.");
+
+  const { film, added } = await addRecommendation(env.DB, title, by);
+  if (!added) return msg(`Already recommended **${film.title}**.`);
+
+  // Names run oldest first, so the caller is last; the rest already had it.
+  const others = film.names.slice(0, -1);
+  return msg(
+    others.length === 0
+      ? `Added **${film.title}**.`
+      : `Added **${film.title}**. Also recommended by ${listNames(others)}.`,
+  );
+}
+
+/** /rec-film — one film off the recs, drawn at random. */
+async function recFilm(): Promise<Response> {
+  const films = groupRecs(await getRecommendations(env.DB));
+  if (films.length === 0) return msg("No recommendations.");
+  return components(buildRecCard(films[Math.floor(Math.random() * films.length)]!));
+}
+
+/** /unrec <title> — take your own rec of a film off the list. Only yours. */
+async function unrec(interaction: Interaction): Promise<Response> {
+  const title = recTitle(interaction);
+  if (!normalizeTitle(title)) return msg("Title required.");
+
+  const by = caller(interaction);
+  if (!by) return msg("Unknown user.");
+
+  const removed = await removeRecommendation(env.DB, title, by.discordId);
+  return msg(removed ? `Removed **${title}**.` : `**${title}** is not on your recommendations.`);
+}
+
 // --- plumbing ---------------------------------------------------------------
+
+/** The title option, trimmed, with runs of whitespace collapsed. */
+function recTitle(interaction: Interaction): string {
+  return option(interaction, "title")?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+/** Who ran the command: their id, and the name they go by where they ran it. */
+function caller(interaction: Interaction): Recommender | null {
+  const user = interaction.member?.user ?? interaction.user;
+  if (!user) return null;
+  return {
+    discordId: user.id,
+    discordName: interaction.member?.nick || user.global_name || user.username,
+  };
+}
 
 /** username -> display name for everyone ever tracked (fallback: username). */
 async function displayNames(): Promise<Record<string, string>> {

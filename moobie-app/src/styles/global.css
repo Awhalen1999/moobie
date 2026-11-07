@@ -178,7 +178,8 @@ img {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.seg button + button {
+.seg button + button,
+.seg-link + .seg-link {
   border-left: none;
 }
 .seg button.active {
@@ -205,6 +206,64 @@ img {
 }
 .theme + .seg-link {
   border-left: none;
+}
+
+/* --- bar controls — shared by the catalog and the recs page ----------------- */
+/* They speak the site's one label voice (.mono); only the underline is theirs. */
+
+.search {
+  flex: 1;
+  max-width: 18rem;
+  padding: 0.35rem 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--ink);
+  color: var(--ink);
+  outline: none;
+}
+.search::placeholder {
+  color: var(--muted);
+}
+
+.select {
+  min-width: 14rem;
+  padding: 0.35rem 1.5rem 0.35rem 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--ink);
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+}
+
+/* Customizable select: the picker anchors below the control instead of the
+   macOS mid-overlay. Browsers without base-select keep the native picker. */
+.select,
+.select::picker(select) {
+  appearance: base-select;
+}
+.select::picker(select) {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 0;
+}
+.select option {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.select option:hover,
+.select option:focus {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.select option:checked {
+  background: var(--ink);
+  color: var(--paper);
+}
+.select option::checkmark {
+  display: none;
 }
 
 /* --- cards (the .panel) — shared by the graph panel and the catalog -------- */

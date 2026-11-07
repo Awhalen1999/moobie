@@ -1,6 +1,6 @@
 # decisions
 
-- two tables. film data lives denormalized on `log_entries` — no films table.
+- three tables. film data lives denormalized on `log_entries` — no films table.
 - every write is `INSERT OR IGNORE` on a unique key, so re-running anything is a no-op.
 - data comes from each person's public letterboxd rss feed. no api, nothing past the feed.
 - `film_key` is the film's letterboxd url slug — groups a film across users better than title + year.
@@ -15,6 +15,7 @@
 - editing a log on letterboxd renames its guid, so it re-announces once. accepted.
 - typescript is pinned to 6 in the app until `astro check` supports 7.
 - no cache headers on `/api/graph` yet — friend-group traffic doesn't need them.
+- recs are free text, one row per normalized title per person — several people stack on a film, the same person twice is a no-op, `/unrec` removes only your own. recommending is discord-only: the signed interaction says who ran `/rec`, so nobody types a name and nothing needs validating. the site only lists them — it has no login.
 
 ## todo
 

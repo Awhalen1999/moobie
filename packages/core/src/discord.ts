@@ -2,7 +2,7 @@
 // no I/O. Sending lives with the poll Worker.
 
 import type { FilmComparison, Superlative, UserRating } from "./analytics.ts";
-import type { LogEntry, TrackedUser, UserStats } from "./types.ts";
+import type { LogEntry, RecFilm, TrackedUser, UserStats } from "./types.ts";
 
 // Letterboxd's palette: green normally, orange when raters disagree.
 const COLOR_DEFAULT = 0x00e054;
@@ -323,6 +323,31 @@ function filmListCard(heading: string, films: LogEntry[], tally: string): Contai
       text(lines.join("\n")),
     ],
   });
+}
+
+/**
+ * Card for /rec-film — one film off the recs, drawn at random, with everyone
+ * who wants it. Recs are free text (no Letterboxd data behind them), so the
+ * link is a Letterboxd search.
+ */
+export function buildRecCard(film: RecFilm): Container {
+  const search = `https://letterboxd.com/search/films/${encodeURIComponent(film.title)}/`;
+  return withSiteFooter({
+    type: 17,
+    accent_color: COLOR_DEFAULT,
+    components: [
+      text(`## ${film.title}\n-# [find it on letterboxd](${search})`),
+      { type: 14, divider: true },
+      text(
+        `Recommended by ${listNames(film.names)}\n-# ${friendlyDate(film.first_at) ?? film.first_at.slice(0, 10)}`,
+      ),
+    ],
+  });
+}
+
+/** Names, bold, comma-separated: "**a**, **b**, **c**". */
+export function listNames(names: string[]): string {
+  return names.map((n) => `**${n}**`).join(", ");
 }
 
 // --- helpers -------------------------------------------------------------

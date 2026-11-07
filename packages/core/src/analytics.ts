@@ -1,7 +1,7 @@
 // Pure functions over log entries — no DB, no network. Callers load the rows
 // and pass them in; the bot and the site share these exact functions.
 
-import type { FilmCatalogEntry, LogEntry } from "./types.ts";
+import type { FilmCatalogEntry, LogEntry, RecFilm, Recommendation } from "./types.ts";
 
 /** A single user's standing opinion on one film. */
 export interface UserRating {
@@ -89,7 +89,8 @@ export function findFilm(
   return best;
 }
 
-function normalizeTitle(s: string): string {
+/** A title collapsed to lowercase alphanumerics — the search and rec-dedup key. */
+export function normalizeTitle(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
@@ -145,6 +146,23 @@ function extreme(
 export function favoriteFilms(entries: LogEntry[]): LogEntry[] {
   return [...latestPerFilm(entries.filter((e) => e.liked === 1)).values()].sort(
     (a, b) => compareRecency(b, a),
+  );
+}
+
+/**
+ * Collapse rec rows to one film each, with everyone who wants it. Most wanted
+ * first, then newest on the list. Pass the rows oldest first, so the title and
+ * the name order follow who recced it first.
+ */
+export function groupRecs(recs: Recommendation[]): RecFilm[] {
+  const byKey = new Map<string, RecFilm>();
+  for (const r of recs) {
+    const film = byKey.get(r.title_key);
+    if (film) film.names.push(r.discord_name);
+    else byKey.set(r.title_key, { title: r.title, title_key: r.title_key, names: [r.discord_name], first_at: r.created_at });
+  }
+  return [...byKey.values()].sort(
+    (a, b) => b.names.length - a.names.length || (a.first_at < b.first_at ? 1 : -1),
   );
 }
 

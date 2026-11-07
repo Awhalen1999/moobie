@@ -51,3 +51,21 @@ export interface TrackedUser {
   active: number; // 0 | 1
   added_at: string;
 }
+
+/** A row from the recommendations table — one person wanting one film. */
+export interface Recommendation {
+  id: number;
+  title: string; // as this person typed it
+  title_key: string; // normalizeTitle(title); groups everyone's recs of one film
+  discord_id: string; // the recommender's Discord id
+  discord_name: string; // their name when they recommended it
+  created_at: string; // ISO timestamp
+}
+
+/** One film on the recs, with everyone who wants it (see groupRecs). */
+export interface RecFilm {
+  title: string; // as the first person typed it
+  title_key: string;
+  names: string[]; // discord names, first rec first
+  first_at: string; // when it first went on the list
+}

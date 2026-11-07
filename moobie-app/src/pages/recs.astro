@@ -1,0 +1,166 @@
+---
+// The recs — every film someone wants the pool to watch: most wanted first,
+// then newest. Rendered on the server; the bar's search, sort, and person
+// filter work over the rows already on the page.
+// Read-only: the site has no login, so recommending happens in Discord
+// (/rec), where the signed interaction names the recommender for free.
+import { env as workerEnv } from "cloudflare:workers";
+import { getRecommendations, groupRecs } from "@moobie/core";
+import Layout from "../layouts/Layout.astro";
+
+export const prerender = false;
+
+const env = workerEnv as unknown as { DB: D1Database };
+const recs = groupRecs(await getRecommendations(env.DB));
+const people = [...new Set(recs.flatMap((r) => r.names))].sort((a, b) => a.localeCompare(b));
+
+// "2026-05-25T…" -> "May 25, 2026"
+const when = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+---
+
+<Layout>
+  <section class="page">
+    <header class="bar">
+      <div class="seg mono">
+        <button class="theme" aria-label="Switch theme" title="Switch theme"></button>
+        <a class="seg-link" href="/">← graph</a>
+      </div>
+      <input id="search" class="search mono" type="search" placeholder="search films" autocomplete="off" spellcheck="false" />
+      <select id="sort" class="select mono" aria-label="Sort films">
+        <option value="wanted">most recommended</option>
+        <option value="new">newest</option>
+        <option value="az">a–z</option>
+      </select>
+      <select id="who" class="select mono" aria-label="Filter by person">
+        <option value="">everyone</option>
+        {people.map((name) => <option value={name}>{name}</option>)}
+      </select>
+    </header>
+    {
+      recs.length === 0 ? (
+        <p class="mono muted empty">no recommendations yet.</p>
+      ) : (
+        <ol class="list" id="list">
+          {recs.map((r, i) => (
+            <li class="rec" data-i={i} data-title={r.title} data-at={r.first_at} data-names={JSON.stringify(r.names)}>
+              <a
+                class="display title"
+                href={`https://letterboxd.com/search/films/${encodeURIComponent(r.title)}/`}
+                rel="noopener"
+              >
+                {r.title}
+              </a>
+              <span class="mono">{r.names.join(" · ")}</span>
+              <span class="mono muted">{when(r.first_at)}</span>
+            </li>
+          ))}
+        </ol>
+      )
+    }
+  </section>
+</Layout>
+
+<script>
+  // Rows are already on the page; the bar only hides, shows, and reorders them.
+  const list = document.getElementById("list");
+  const rows = [...(list?.querySelectorAll<HTMLLIElement>(".rec") ?? [])];
+  const search = document.querySelector<HTMLInputElement>("#search")!;
+  const sort = document.querySelector<HTMLSelectElement>("#sort")!;
+  const who = document.querySelector<HTMLSelectElement>("#who")!;
+
+  // Same forgiving search as the catalog and the bot: case, punctuation, spacing.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+  // "wanted" is the server's order (most names, then newest), kept in data-i.
+  const sorters: Record<string, (a: HTMLLIElement, b: HTMLLIElement) => number> = {
+    wanted: (a, b) => Number(a.dataset.i) - Number(b.dataset.i),
+    new: (a, b) => b.dataset.at!.localeCompare(a.dataset.at!),
+    az: (a, b) => a.dataset.title!.localeCompare(b.dataset.title!),
+  };
+
+  function render() {
+    const q = norm(search.value);
+    const shown = rows
+      .filter((r) => !q || norm(r.dataset.title!).includes(q))
+      .filter((r) => !who.value || (JSON.parse(r.dataset.names!) as string[]).includes(who.value))
+      .sort(sorters[sort.value] ?? sorters.wanted!);
+    for (const r of rows) r.hidden = true;
+    for (const r of shown) r.hidden = false;
+    list?.append(...shown); // append moves the nodes, so this is the reorder
+  }
+
+  search.addEventListener("input", render);
+  sort.addEventListener("change", render);
+  who.addEventListener("change", render);
+</script>
+
+<style>
+  .page {
+    min-height: 100dvh;
+  }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2);
+    background: var(--paper);
+  }
+
+  .list {
+    list-style: none;
+    max-width: 48rem;
+    margin: 0 var(--space-2) var(--space-4);
+    border-bottom: var(--hairline); /* on the list, not the last row - filters hide rows */
+  }
+
+  /* One hairline row per rec: the film in Tiempos, the people and date in mono. */
+  .rec {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: var(--space-2);
+    align-items: baseline;
+    padding: var(--space-2) 0;
+    border-top: var(--hairline);
+  }
+  .rec[hidden] {
+    display: none; /* display: grid above would otherwise defeat the hidden attribute */
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .title:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .empty {
+    padding: var(--space-2);
+  }
+
+  @media (max-width: 720px) {
+    /* Same bar wrap as the catalog: search on its own row, the dropdowns split the next. */
+    .search {
+      flex: 1 1 100%;
+      max-width: none;
+    }
+    .select {
+      flex: 1 1 40%;
+      min-width: 0;
+    }
+    /* The title takes the row; people and date sit under it. */
+    .rec {
+      grid-template-columns: auto 1fr;
+      gap: var(--space-1) var(--space-2);
+    }
+    .title {
+      grid-column: 1 / -1;
+      font-size: 1.25rem;
+    }
+  }
+</style>

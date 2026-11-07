@@ -89,6 +89,8 @@ placeholder text. Transitions ~250ms ease; nothing bounces.
 ## Copy
 
 Plain short sentences, nothing trying to be funny. Misses end in "yet";
-successes get exactly one leading emoji (🎬 👋 ✅). Replies never name the
+successes get exactly one leading emoji (🎬 👋 ✅). The rec commands go
+flatter still: no emoji, no "yet", just the fact ("Added **X**.", "No recommendations.").
+"Rec" is only the command names and the site's nav link; everything else says the full word. Replies never name the
 machinery (workers, polling, rss). Bot text uses plain hyphens, never
 em-dashes.

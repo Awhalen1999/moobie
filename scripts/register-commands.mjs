@@ -149,6 +149,36 @@ const commands = [
       },
     ],
   },
+  {
+    name: "rec",
+    description: "Add a film to the recommendations",
+    options: [
+      {
+        type: STRING,
+        name: "title",
+        description: "The film",
+        required: true,
+        max_length: 200, // Discord enforces it - no need to re-check in the handler
+      },
+    ],
+  },
+  {
+    name: "rec-film",
+    description: "Random film from the recommendations",
+  },
+  {
+    name: "unrec",
+    description: "Remove a film from your recommendations",
+    options: [
+      {
+        type: STRING,
+        name: "title",
+        description: "The film",
+        required: true,
+        max_length: 200,
+      },
+    ],
+  },
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

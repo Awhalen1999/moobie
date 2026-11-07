@@ -1,4 +1,4 @@
--- moobie schema — 2 tables, film data denormalized into log_entries.
+-- moobie schema — 3 tables, film data denormalized into log_entries.
 -- Every writer uses INSERT OR IGNORE on a UNIQUE key, so re-ingesting is a no-op
 -- and the poll loop is idempotent. Do not remove the UNIQUE constraints.
 
@@ -36,3 +36,18 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_film_key ON log_entries(film_key);
 
 -- Look up one user's logs, newest first (user pages).
 CREATE INDEX IF NOT EXISTS idx_log_entries_username ON log_entries(username, watched_date DESC);
+
+-- Films people want the pool to watch. Added from Discord only (/rec): the
+-- interaction is signed, so the recommender is whoever Discord says ran it.
+-- One row per film per person — title_key is the title collapsed to lowercase
+-- alphanumerics (same as /film search), so several people reccing one film
+-- stack on it, and the same person reccing it twice is a no-op.
+CREATE TABLE IF NOT EXISTS recommendations (
+  id            INTEGER PRIMARY KEY,
+  title         TEXT NOT NULL,         -- as this person typed it
+  title_key     TEXT NOT NULL,         -- normalized title; groups everyone's recs of one film
+  discord_id    TEXT NOT NULL,         -- who recommended it; the stable identity
+  discord_name  TEXT NOT NULL,         -- their name at the time: nick > display name > username
+  created_at    TEXT NOT NULL,         -- ISO timestamp
+  UNIQUE (title_key, discord_id)       -- one rec per film per person
+);
