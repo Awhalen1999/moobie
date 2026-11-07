@@ -23,6 +23,7 @@ const { title = "moobie" } = Astro.props;
       const dark = stored ? stored === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
       document.documentElement.dataset.theme = dark ? "dark" : "light";
     </script>
+    <script src="../scripts/analytics.ts"></script>
   </head>
   <body>
     <main>

@@ -58,6 +58,7 @@ const people = [...new Set(recs.flatMap((r) => r.recommenders.map((p) => p.disco
 
 <script>
   import { recCardHtml } from "../lib/cards";
+  import { track } from "../scripts/analytics";
   import type { RecFilm } from "@moobie/core";
 
   const grid = document.getElementById("grid")!;
@@ -122,6 +123,13 @@ const people = [...new Set(recs.flatMap((r) => r.recommenders.map((p) => p.disco
     if (pinned === t) return hide();
     pinned = t;
     show(t);
+    const f = film(t);
+    track("rec card opened", {
+      film: f.title,
+      year: f.film_year,
+      tmdb_id: f.tmdb_id,
+      recommenders: f.recommenders.length,
+    });
   });
   panel.addEventListener("click", (e) => {
     if ((e.target as Element).closest(".card-x")) hide();

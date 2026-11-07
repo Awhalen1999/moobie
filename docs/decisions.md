@@ -15,6 +15,7 @@
 - editing a log on letterboxd renames its guid, so it re-announces once. accepted.
 - typescript is pinned to 6 in the app until `astro check` supports 7.
 - no cache headers on `/api/graph` yet — friend-group traffic doesn't need them.
+- posthog shares the awln.dev project (one project on the free plan). every event carries `app = moobie` as a super property — dashboards filter on it. built site only; local sends nothing. session replay is on. named events: film card opened (graph/catalog), rec card opened, person card opened, letterboxd opened, theme switched, graph mode changed, graph view changed.
 - recs resolve through tmdb's search api (free personal key, one secret) into a real film: title, year, poster, id. a title tmdb doesn't know is refused; if tmdb is down the rec is kept as typed. letterboxd blocks the bot from searching, and its posters are tmdb's anyway. `letterboxd.com/tmdb/<id>` links to the film's page.
 - one rec row per film per person — several people stack on a film, the same person twice is a no-op, `/unrec` removes only your own. recommending is discord-only: the signed interaction says who ran `/rec`, so nobody types a name. the site only lists them — it has no login.
 

@@ -3,6 +3,7 @@ packages:
   - "moobie-app"
   - "moobie-poll"
 allowBuilds:
+  core-js: false # via posthog-js; its postinstall only prints a funding note
   esbuild: set this to true or false
   sharp: set this to true or false
   workerd: set this to true or false

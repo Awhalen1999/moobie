@@ -40,6 +40,7 @@ import Layout from "../layouts/Layout.astro";
   } from "d3-force";
 
   import { esc, num, gapClass, filmCardHtml, DEFAULT_AVATAR_URL, type Film, type Person } from "../lib/cards";
+  import { track } from "../scripts/analytics";
 
   interface Payload {
     people: Person[];
@@ -470,9 +471,13 @@ import Layout from "../layouts/Layout.astro";
       focused = focused === n ? null : n;
       pinned = null;
       pinnedLink = null;
+      if (focused) track("person card opened", { person: n.person!.username });
     } else if (n?.kind === "film") {
       pinned = pinned === n ? null : n;
       pinnedLink = null;
+      if (pinned) {
+        track("film card opened", { film: n.film!.title, year: n.film!.year, film_key: n.film!.key, from: "graph" });
+      }
     } else if (l) {
       pinnedLink = pinnedLink === l ? null : l;
       pinned = null;
@@ -593,8 +598,14 @@ import Layout from "../layouts/Layout.astro";
     viewToggle.hidden = m === "people"; // shared/everything only means something with film nodes
     reset();
   }
-  btnFilms.addEventListener("click", () => setMode("films"));
-  btnPeople.addEventListener("click", () => setMode("people"));
+  btnFilms.addEventListener("click", () => {
+    setMode("films");
+    track("graph mode changed", { mode: "films" });
+  });
+  btnPeople.addEventListener("click", () => {
+    setMode("people");
+    track("graph mode changed", { mode: "people" });
+  });
 
   function setView(shared: boolean) {
     sharedOnly = shared;
@@ -602,8 +613,14 @@ import Layout from "../layouts/Layout.astro";
     btnAll.classList.toggle("active", !shared);
     reset();
   }
-  btnShared.addEventListener("click", () => setView(true));
-  btnAll.addEventListener("click", () => setView(false));
+  btnShared.addEventListener("click", () => {
+    setView(true);
+    track("graph view changed", { view: "shared" });
+  });
+  btnAll.addEventListener("click", () => {
+    setView(false);
+    track("graph view changed", { view: "everything" });
+  });
 
   // --- boot ----------------------------------------------------------------
 
