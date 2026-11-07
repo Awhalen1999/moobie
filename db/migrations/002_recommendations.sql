@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS recommendations (
   discord_id        TEXT NOT NULL,     -- who recommended it; the one identity that never changes
   discord_name      TEXT NOT NULL,     -- what they were called at the time: nick > display name > username
   discord_username  TEXT NOT NULL,     -- their @handle at the time; shown in brackets after the name
+  tmdb_id           INTEGER,           -- TMDB film id when the title matched; null when TMDB couldn't be reached
+  film_year         INTEGER,           -- from TMDB; nullable
+  poster_url        TEXT,              -- TMDB poster; nullable
   created_at        TEXT NOT NULL,     -- ISO timestamp
   UNIQUE (title_key, discord_id)       -- one rec per film per person
 );

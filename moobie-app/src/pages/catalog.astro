@@ -184,42 +184,6 @@ import Layout from "../layouts/Layout.astro";
     box-shadow: inset 0 0 0 0.35rem var(--paper);
   }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-    gap: 2px;
-    padding: 2px;
-  }
-  .grid :global(.tile) {
-    aspect-ratio: 2 / 3;
-    padding: 0;
-    background: color-mix(in srgb, var(--ink) 6%, transparent);
-    cursor: pointer;
-  }
-  .grid :global(.tile img) {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .grid :global(.tile:hover) {
-    outline: 1px solid var(--ink);
-    outline-offset: -1px;
-  }
-  .grid :global(.load-error) {
-    grid-column: 1 / -1;
-    padding: var(--space-2);
-  }
-  .grid :global(.no-poster) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    padding: var(--space-1);
-    font-size: 1.1rem;
-    text-align: center;
-  }
-
   .panel {
     position: fixed;
     top: var(--space-2);
@@ -239,9 +203,6 @@ import Layout from "../layouts/Layout.astro";
     .select {
       flex: 1 1 40%;
       min-width: 0;
-    }
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
     }
     .panel {
       top: auto;

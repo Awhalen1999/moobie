@@ -55,21 +55,27 @@ export interface TrackedUser {
 /** A row from the recommendations table — one person wanting one film. */
 export interface Recommendation {
   id: number;
-  title: string; // as this person typed it
-  title_key: string; // normalizeTitle(title); groups everyone's recs of one film
+  title: string; // TMDB's title; as typed when TMDB couldn't be reached
+  title_key: string; // "tmdb:<id>", or normalizeTitle(title) as the fallback; groups everyone's recs of one film
+  tmdb_id: number | null;
+  film_year: number | null;
+  poster_url: string | null;
   discord_id: string; // the recommender's Discord id — the one thing that never changes
   discord_name: string; // what they were called when they recommended it
   discord_username: string; // their @handle at the time
   created_at: string; // ISO timestamp
 }
 
-/** One person on a RecFilm: the name they go by, and their @handle. */
-export type Recommender = Pick<Recommendation, "discord_name" | "discord_username">;
+/** One person on a RecFilm: the name they go by, their @handle, and when they recommended it. */
+export type Recommender = Pick<Recommendation, "discord_name" | "discord_username" | "created_at">;
 
 /** One film on the recs, with everyone who wants it (see groupRecs). */
 export interface RecFilm {
-  title: string; // as the first person typed it
+  title: string;
   title_key: string;
+  tmdb_id: number | null;
+  film_year: number | null;
+  poster_url: string | null;
   recommenders: Recommender[]; // first rec first
   first_at: string; // when it first went on the list
 }

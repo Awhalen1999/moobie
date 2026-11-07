@@ -2,11 +2,12 @@
   "name": "@moobie/core",
   "version": "1.0.0",
   "type": "module",
-  "description": "Shared logic for moobie: D1 queries, Letterboxd RSS fetch, analytics, Discord.",
+  "description": "Shared logic for moobie: D1 queries, Letterboxd RSS fetch, TMDB search, analytics, Discord.",
   "exports": {
     ".": "./src/index.ts",
     "./db": "./src/db.ts",
     "./letterboxd": "./src/letterboxd.ts",
+    "./tmdb": "./src/tmdb.ts",
     "./analytics": "./src/analytics.ts",
     "./discord": "./src/discord.ts",
     "./types": "./src/types.ts"

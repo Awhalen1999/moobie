@@ -1,0 +1,5 @@
+# Copy to .dev.vars for local `wrangler dev`. Real values are set in production
+# with `wrangler secret put <NAME>` and never committed.
+
+# TMDB "API Read Access Token" (themoviedb.org/settings/api) - resolves /rec titles.
+TMDB_TOKEN=paste-tmdb-read-access-token-here

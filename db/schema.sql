@@ -39,9 +39,11 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_username ON log_entries(username, wat
 
 -- Films people want the pool to watch. Added from Discord only (/rec): the
 -- interaction is signed, so the recommender is whoever Discord says ran it.
--- One row per film per person — title_key is the title collapsed to lowercase
--- alphanumerics (same as /film search), so several people reccing one film
--- stack on it, and the same person reccing it twice is a no-op.
+-- The typed title is resolved through TMDB search into a real film (title,
+-- year, poster), and title_key is "tmdb:<id>" — so several people reccing one
+-- film stack on it however they spelled it, and the same person twice is a
+-- no-op. If TMDB can't be reached the rec is kept as typed, keyed on the title
+-- collapsed to lowercase alphanumerics (same as /film search).
 CREATE TABLE IF NOT EXISTS recommendations (
   id                INTEGER PRIMARY KEY,
   title             TEXT NOT NULL,     -- as this person typed it
@@ -49,6 +51,9 @@ CREATE TABLE IF NOT EXISTS recommendations (
   discord_id        TEXT NOT NULL,     -- who recommended it; the one identity that never changes
   discord_name      TEXT NOT NULL,     -- what they were called at the time: nick > display name > username
   discord_username  TEXT NOT NULL,     -- their @handle at the time; shown in brackets after the name
+  tmdb_id           INTEGER,           -- TMDB film id when the title matched; null when TMDB couldn't be reached
+  film_year         INTEGER,           -- from TMDB; nullable
+  poster_url        TEXT,              -- TMDB poster; nullable
   created_at        TEXT NOT NULL,     -- ISO timestamp
   UNIQUE (title_key, discord_id)       -- one rec per film per person
 );

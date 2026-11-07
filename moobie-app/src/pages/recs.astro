@@ -1,7 +1,9 @@
 ---
-// The recs — every film someone wants the pool to watch: most wanted first,
-// then newest. Rendered on the server; the bar's search, sort, and person
-// filter work over the rows already on the page.
+// The recs — every film someone wants the pool to watch, as a poster wall
+// like the catalog: hover a poster to see who recommended it, click to keep
+// the card open. Most recommended first, then newest. Rendered on the server;
+// the bar's search, sort, and person filter work over the tiles already on
+// the page.
 // Read-only: the site has no login, so recommending happens in Discord
 // (/rec), where the signed interaction names the recommender for free.
 import { env as workerEnv } from "cloudflare:workers";
@@ -12,15 +14,10 @@ export const prerender = false;
 
 const env = workerEnv as unknown as { DB: D1Database };
 const recs = groupRecs(await getRecommendations(env.DB));
-// Everyone who has recommended something, once each, keyed by username.
-const people = [...new Map(recs.flatMap((r) => r.recommenders).map((p) => [p.discord_username, p])).values()]
-  .sort((a, b) => a.discord_name.localeCompare(b.discord_name));
-const label = (p: { discord_name: string; discord_username: string }) =>
-  `${p.discord_name} (${p.discord_username})`;
 
-// "2026-05-25T…" -> "May 25, 2026"
-const when = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+// Everyone who has recommended something, once each, keyed by username.
+const people = [...new Set(recs.flatMap((r) => r.recommenders.map((p) => p.discord_username)))]
+  .sort((a, b) => a.localeCompare(b));
 ---
 
 <Layout>
@@ -38,65 +35,103 @@ const when = (iso: string) =>
       </select>
       <select id="who" class="select mono" aria-label="Filter by person">
         <option value="">everyone</option>
-        {people.map((p) => <option value={p.discord_username}>{label(p)}</option>)}
+        {people.map((u) => <option value={u}>{u}</option>)}
       </select>
     </header>
-    {
-      recs.length === 0 ? (
-        <p class="mono muted empty">no recommendations yet.</p>
-      ) : (
-        <ol class="list" id="list">
-          {recs.map((r, i) => (
-            <li class="rec" data-i={i} data-title={r.title} data-at={r.first_at} data-usernames={JSON.stringify(r.recommenders.map((p) => p.discord_username))}>
-              <a
-                class="display title"
-                href={`https://letterboxd.com/search/films/${encodeURIComponent(r.title)}/`}
-                rel="noopener"
-              >
-                {r.title}
-              </a>
-              <span class="mono">{r.recommenders.map(label).join(" · ")}</span>
-              <span class="mono muted">{when(r.first_at)}</span>
-            </li>
-          ))}
-        </ol>
-      )
-    }
+    <div class="grid" id="grid">
+      {recs.length === 0 && <p class="mono muted load-error">no recommendations yet.</p>}
+      {
+        recs.map((r, i) => (
+          <button class="tile" data-i={i} data-rec={JSON.stringify(r)} title={r.title}>
+            {r.poster_url ? (
+              <img src={r.poster_url} alt={r.title} loading="lazy" decoding="async" />
+            ) : (
+              <span class="no-poster display">{r.title}</span>
+            )}
+          </button>
+        ))
+      }
+    </div>
+    <aside class="panel" id="panel" aria-live="polite" hidden></aside>
   </section>
 </Layout>
 
 <script>
-  // Rows are already on the page; the bar only hides, shows, and reorders them.
-  const list = document.getElementById("list");
-  const rows = [...(list?.querySelectorAll<HTMLLIElement>(".rec") ?? [])];
+  import { recCardHtml } from "../lib/cards";
+  import type { RecFilm } from "@moobie/core";
+
+  const grid = document.getElementById("grid")!;
+  const panel = document.getElementById("panel")!;
   const search = document.querySelector<HTMLInputElement>("#search")!;
   const sort = document.querySelector<HTMLSelectElement>("#sort")!;
   const who = document.querySelector<HTMLSelectElement>("#who")!;
 
+  // Tiles are already on the page; each carries its film as JSON.
+  const tiles = [...grid.querySelectorAll<HTMLButtonElement>(".tile")];
+  const film = (t: HTMLButtonElement) => JSON.parse(t.dataset.rec!) as RecFilm;
+
   // Same forgiving search as the catalog and the bot: case, punctuation, spacing.
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-  // "wanted" is the server's order (most names, then newest), kept in data-i.
-  const sorters: Record<string, (a: HTMLLIElement, b: HTMLLIElement) => number> = {
+  // "wanted" is the server's order (most recommenders, then newest), kept in data-i.
+  const sorters: Record<string, (a: HTMLButtonElement, b: HTMLButtonElement) => number> = {
     wanted: (a, b) => Number(a.dataset.i) - Number(b.dataset.i),
-    new: (a, b) => b.dataset.at!.localeCompare(a.dataset.at!),
-    az: (a, b) => a.dataset.title!.localeCompare(b.dataset.title!),
+    new: (a, b) => film(b).first_at.localeCompare(film(a).first_at),
+    az: (a, b) => film(a).title.localeCompare(film(b).title),
   };
 
+  /** Search + person filter + sort applied by hiding, showing, and reordering the tiles. */
   function render() {
     const q = norm(search.value);
-    const shown = rows
-      .filter((r) => !q || norm(r.dataset.title!).includes(q))
-      .filter((r) => !who.value || (JSON.parse(r.dataset.usernames!) as string[]).includes(who.value))
+    const shown = tiles
+      .filter((t) => !q || norm(film(t).title).includes(q))
+      .filter((t) => !who.value || film(t).recommenders.some((p) => p.discord_username === who.value))
       .sort(sorters[sort.value] ?? sorters.wanted!);
-    for (const r of rows) r.hidden = true;
-    for (const r of shown) r.hidden = false;
-    list?.append(...shown); // append moves the nodes, so this is the reorder
+    for (const t of tiles) t.hidden = true;
+    for (const t of shown) t.hidden = false;
+    grid.append(...shown); // append moves the nodes, so this is the reorder
   }
 
   search.addEventListener("input", render);
   sort.addEventListener("change", render);
   who.addEventListener("change", render);
+
+  // Hover a poster to see who recommended it; click to keep the card open.
+  // Click the card's x, anywhere else, or Escape to put it away.
+  let pinned: HTMLButtonElement | null = null;
+  const tileOf = (e: Event) => (e.target as Element).closest(".tile") as HTMLButtonElement | null;
+  function show(t: HTMLButtonElement) {
+    panel.innerHTML = recCardHtml(film(t));
+    panel.hidden = false;
+  }
+  function hide() {
+    pinned = null;
+    panel.hidden = true;
+  }
+
+  grid.addEventListener("pointerover", (e) => {
+    const t = tileOf(e);
+    if (t && !pinned) show(t);
+  });
+  grid.addEventListener("pointerleave", () => {
+    if (!pinned) panel.hidden = true;
+  });
+  grid.addEventListener("click", (e) => {
+    const t = tileOf(e);
+    if (!t) return;
+    if (pinned === t) return hide();
+    pinned = t;
+    show(t);
+  });
+  panel.addEventListener("click", (e) => {
+    if ((e.target as Element).closest(".card-x")) hide();
+  });
+  document.addEventListener("click", (e) => {
+    if (!(e.target as Element).closest(".tile, .panel")) hide();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
 </script>
 
 <style>
@@ -116,35 +151,14 @@ const when = (iso: string) =>
     background: var(--paper);
   }
 
-  .list {
-    list-style: none;
-    max-width: 48rem;
-    margin: 0 var(--space-2) var(--space-4);
-    border-bottom: var(--hairline); /* on the list, not the last row - filters hide rows */
-  }
-
-  /* One hairline row per rec: the film in Tiempos, the people and date in mono. */
-  .rec {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: var(--space-2);
-    align-items: baseline;
-    padding: var(--space-2) 0;
-    border-top: var(--hairline);
-  }
-  .rec[hidden] {
-    display: none; /* display: grid above would otherwise defeat the hidden attribute */
-  }
-  .title {
-    font-size: 1.5rem;
-  }
-  .title:hover {
-    text-decoration: underline;
-    text-underline-offset: 0.15em;
-  }
-
-  .empty {
-    padding: var(--space-2);
+  /* Same floating card as the catalog. */
+  .panel {
+    position: fixed;
+    top: var(--space-2);
+    right: var(--space-2);
+    z-index: 20;
+    max-height: calc(100dvh - 2 * var(--space-2));
+    overflow-y: auto;
   }
 
   @media (max-width: 720px) {
@@ -157,14 +171,15 @@ const when = (iso: string) =>
       flex: 1 1 40%;
       min-width: 0;
     }
-    /* The title takes the row; people and date sit under it. */
-    .rec {
-      grid-template-columns: auto 1fr;
-      gap: var(--space-1) var(--space-2);
-    }
-    .title {
-      grid-column: 1 / -1;
-      font-size: 1.25rem;
+    .panel {
+      top: auto;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      width: auto;
+      max-height: 60vh;
+      border: none;
+      border-top: var(--rule);
     }
   }
 </style>

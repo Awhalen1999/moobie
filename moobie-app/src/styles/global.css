@@ -266,6 +266,52 @@ img {
   display: none;
 }
 
+/* --- poster wall — shared by the catalog and the recs page ------------------ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 2px;
+  padding: 2px;
+}
+.grid .tile {
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  cursor: pointer;
+}
+.grid .tile[hidden] {
+  display: none; /* filters hide tiles; the attribute must win over the grid item */
+}
+.grid .tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.grid .tile:hover {
+  outline: 1px solid var(--ink);
+  outline-offset: -1px;
+}
+.grid .load-error {
+  grid-column: 1 / -1;
+  padding: var(--space-2);
+}
+.grid .no-poster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-1);
+  font-size: 1.1rem;
+  text-align: center;
+}
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  }
+}
+
 /* --- cards (the .panel) — shared by the graph panel and the catalog -------- */
 
 .panel {
@@ -304,6 +350,11 @@ img {
   font-size: 1.5rem;
   margin: 0.4rem 0 0.8rem;
   font-weight: 400;
+}
+/* The title is the film's Letterboxd link; the underline on hover says so. */
+.panel h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 .panel .person-name {
   font-family: var(--font-mono);

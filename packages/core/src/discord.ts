@@ -327,16 +327,22 @@ function filmListCard(heading: string, films: LogEntry[], tally: string): Contai
 
 /**
  * Card for /rec-film — one film off the recs, drawn at random, with everyone
- * who wants it. Recs are free text (no Letterboxd data behind them), so the
- * link is a Letterboxd search.
+ * who wants it. Same shape as the film card: poster on top, title, link.
+ * letterboxd.com/tmdb/<id> redirects to the film's Letterboxd page; a rec
+ * TMDB never matched falls back to a Letterboxd search for the typed title.
  */
 export function buildRecCard(film: RecFilm): Container {
-  const search = `https://letterboxd.com/search/films/${encodeURIComponent(film.title)}/`;
+  const link = film.tmdb_id
+    ? `[letterboxd.com/tmdb/${film.tmdb_id}](https://letterboxd.com/tmdb/${film.tmdb_id}/)`
+    : `[find it on letterboxd](https://letterboxd.com/search/films/${encodeURIComponent(film.title)}/)`;
   return withSiteFooter({
     type: 17,
     accent_color: COLOR_DEFAULT,
     components: [
-      text(`## ${film.title}\n-# [find it on letterboxd](${search})`),
+      ...(film.poster_url
+        ? [{ type: 12 as const, items: [{ media: { url: film.poster_url } }] }]
+        : []),
+      text(`## ${filmTitle({ film_title: film.title, film_year: film.film_year })}\n-# ${link}`),
       { type: 14, divider: true },
       text(
         `Recommended by ${listNames(film.recommenders)}\n-# ${friendlyDate(film.first_at) ?? film.first_at.slice(0, 10)}`,

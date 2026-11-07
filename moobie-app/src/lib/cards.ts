@@ -1,6 +1,8 @@
 // The film card (poster, title, rater rows, avg, gap), built once and used by
-// every page — the graph's panel and the catalog. Colors come from token
-// classes so themes keep working.
+// every page — the graph's panel and the catalog — and the rec card the recs
+// wall opens. Colors come from token classes so themes keep working.
+
+import type { RecFilm } from "@moobie/core";
 
 export interface Rater {
   username: string;
@@ -56,6 +58,12 @@ const ratingHtml = (rating: number | null, liked: number) => {
   return `<span class="rating">${stars}${liked ? `<span class="heart">${HEART_SVG}</span>` : ""}</span>`;
 };
 
+/** The card heading: the title links to the film on Letterboxd (new tab), the year stays plain. */
+const titleHtml = (title: string, year: number | null, href: string) =>
+  `<h3 class="display"><a href="${esc(href)}" target="_blank" rel="noopener">${esc(title)}</a>` +
+  (year ? ` <span class="muted">(${year})</span>` : "") +
+  `</h3>`;
+
 /** The film card: poster, title, one row per rater, avg + gap when they mean something. */
 export function filmCardHtml(f: Film, name: (username: string) => string): string {
   const rows = f.raters
@@ -78,9 +86,33 @@ export function filmCardHtml(f: Film, name: (username: string) => string): strin
   return (
     `<button class="card-x" aria-label="Close">${CLOSE_SVG}</button>` +
     (f.posterUrl ? `<img class="poster" src="${esc(f.posterUrl)}" alt="" loading="lazy" />` : "") +
-    `<h3 class="display">${esc(f.title)}${f.year ? ` <span class="muted">(${f.year})</span>` : ""}</h3>` +
+    titleHtml(f.title, f.year, `https://letterboxd.com/film/${f.key}/`) +
     rows +
     avg +
     gap
+  );
+}
+
+/**
+ * The rec card: poster, title, one row per person who recommended it (their
+ * username and the date - nicknames stay off the site). letterboxd.com/tmdb/<id>
+ * redirects to the film's page; a rec TMDB never matched links to a search.
+ */
+export function recCardHtml(f: RecFilm): string {
+  const link = f.tmdb_id
+    ? `https://letterboxd.com/tmdb/${f.tmdb_id}/`
+    : `https://letterboxd.com/search/films/${encodeURIComponent(f.title)}/`;
+  const rows = f.recommenders
+    .map(
+      (p) =>
+        `<div class="row"><span class="mono">${esc(p.discord_username)}</span>` +
+        `<span class="mono muted">${new Date(p.created_at).toLocaleDateString("en-US")}</span></div>`,
+    )
+    .join("");
+  return (
+    `<button class="card-x" aria-label="Close">${CLOSE_SVG}</button>` +
+    (f.poster_url ? `<img class="poster" src="${esc(f.poster_url)}" alt="" loading="lazy" />` : "") +
+    titleHtml(f.title, f.film_year, link) +
+    rows
   );
 }

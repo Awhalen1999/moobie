@@ -2,9 +2,9 @@
 // signature is verified on the raw body before any JSON parsing, then the
 // command name picks a handler.
 //
-// /track does network work, so it uses Discord's deferred reply: answer
-// "thinking…" inside the 3-second window, finish via waitUntil, edit the
-// reply. Everything else answers directly.
+// /track and /rec do network work, so they use Discord's deferred reply:
+// answer "thinking…" inside the 3-second window, finish via waitUntil, edit
+// the reply. Everything else answers directly.
 
 import type { APIRoute } from "astro";
 import { env as workerEnv, waitUntil } from "cloudflare:workers";
@@ -33,6 +33,7 @@ import {
   getRecentEntries,
   getRecommendations,
   getRecommendationsByKey,
+  getRecommendationsByUser,
   getUserStats,
   insertEntries,
   groupRecs,
@@ -40,11 +41,12 @@ import {
   listNames,
   normalizeTitle,
   removeRecommendation,
+  searchTmdb,
   worstFilms,
   type Container,
   type EmbedContext,
   type Recommendation,
-  type Recommender,
+  type TmdbFilm,
 } from "@moobie/core";
 
 export const prerender = false;
@@ -59,6 +61,7 @@ const DEFERRED_MESSAGE = 5;
 interface Env {
   DB: D1Database;
   DISCORD_PUBLIC_KEY: string;
+  TMDB_TOKEN: string; // secret: TMDB "API Read Access Token"
 }
 
 const env = workerEnv as unknown as Env;
@@ -338,29 +341,62 @@ async function stats(interaction: Interaction): Promise<Response> {
 
 /**
  * /rec <title> — put a film on the pool's recs. The recommender is whoever
- * ran the command; nobody types a name. One rec per film per person: a second
- * person stacks on the film, the same person again is a no-op. Replies are
- * flat statements - no voice.
+ * ran the command; nobody types a name. The title is resolved through TMDB
+ * (so "ratatouille" lands as Ratatouille (2007) with a poster, and a title
+ * TMDB doesn't know is refused), which is network work - so this defers.
+ * One rec per film per person: a second person stacks on the film, the same
+ * person again is a no-op. Replies are flat statements - no voice.
  */
-async function rec(interaction: Interaction): Promise<Response> {
+function rec(interaction: Interaction): Response {
   const title = recTitle(interaction);
-  const key = normalizeTitle(title);
-  if (!key) return msg("Title required.");
+  if (!normalizeTitle(title)) return msg("Title required.");
 
   const by = caller(interaction);
   if (!by) return msg("Unknown user.");
 
-  const added = await addRecommendation(env.DB, { title, title_key: key, ...by });
-  const film = groupRecs(await getRecommendationsByKey(env.DB, key))[0]!;
-  if (!added) return msg(`Already recommended **${film.title}**.`);
+  waitUntil(finishRec(interaction, title, by));
+  return json({ type: DEFERRED_MESSAGE });
+}
 
-  // Recommenders run oldest first, so the caller is last; the rest already had it.
-  const others = film.recommenders.slice(0, -1);
-  return msg(
-    others.length === 0
-      ? `Added **${film.title}**.`
-      : `Added **${film.title}**. Also recommended by ${listNames(others)}.`,
-  );
+async function finishRec(
+  interaction: Interaction,
+  title: string,
+  by: Caller,
+): Promise<void> {
+  let content: string;
+  try {
+    // null: TMDB knows no such film. undefined: TMDB couldn't be reached -
+    // keep the rec as typed rather than lose it, just without film data.
+    let match: TmdbFilm | null | undefined;
+    try {
+      match = await searchTmdb(env.TMDB_TOKEN, title);
+    } catch (err) {
+      console.error(`moobie-app: /rec TMDB lookup failed for "${title}":`, err);
+    }
+
+    if (match === null) {
+      content = `No film found for **${title}**.`;
+    } else {
+      const film = match ?? { tmdb_id: null, title, film_year: null, poster_url: null };
+      const key = match ? `tmdb:${match.tmdb_id}` : normalizeTitle(title);
+      const added = await addRecommendation(env.DB, { ...film, title_key: key, ...by });
+      const grouped = groupRecs(await getRecommendationsByKey(env.DB, key))[0]!;
+      const shown = filmTitle({ film_title: grouped.title, film_year: grouped.film_year });
+
+      // Recommenders run oldest first, so the caller is last; the rest already had it.
+      const others = grouped.recommenders.slice(0, -1);
+      content = !added
+        ? `Already recommended **${shown}**.`
+        : others.length === 0
+          ? `Added **${shown}**.`
+          : `Added **${shown}**. Also recommended by ${listNames(others)}.`;
+      if (match === undefined) content += " Film lookup failed, so no poster.";
+    }
+  } catch (err) {
+    console.error(`moobie-app: /rec failed for "${title}":`, err);
+    content = "Something went wrong.";
+  }
+  await editReply(interaction, content);
 }
 
 /** /rec-film — one film off the recs, drawn at random. */
@@ -370,17 +406,27 @@ async function recFilm(): Promise<Response> {
   return components(buildRecCard(films[Math.floor(Math.random() * films.length)]!));
 }
 
-/** /unrec <title> — take your own rec of a film off the list. Only yours. */
+/**
+ * /unrec <title> — take your own rec of a film off the list. Only yours, and
+ * matched against your own list with the same forgiving search as /film, so
+ * no TMDB round trip and "rata" is enough.
+ */
 async function unrec(interaction: Interaction): Promise<Response> {
   const title = recTitle(interaction);
-  const key = normalizeTitle(title);
-  if (!key) return msg("Title required.");
+  if (!normalizeTitle(title)) return msg("Title required.");
 
   const by = caller(interaction);
   if (!by) return msg("Unknown user.");
 
-  const removed = await removeRecommendation(env.DB, key, by.discord_id);
-  return msg(removed ? `Removed **${title}**.` : `**${title}** is not on your recommendations.`);
+  const mine = await getRecommendationsByUser(env.DB, by.discord_id);
+  const hit = findFilm(
+    mine.map((r) => ({ film_key: r.title_key, film_title: r.title, logs: 1, last_logged: r.created_at })),
+    title,
+  );
+  if (!hit) return msg(`**${title}** is not on your recommendations.`);
+
+  await removeRecommendation(env.DB, hit.film_key, by.discord_id);
+  return msg(`Removed **${hit.film_title}**.`);
 }
 
 // --- plumbing ---------------------------------------------------------------
@@ -390,10 +436,11 @@ function recTitle(interaction: Interaction): string {
   return option(interaction, "title")?.trim().replace(/\s+/g, " ") ?? "";
 }
 
+/** The identity a rec row stores about whoever ran the command. */
+type Caller = Pick<Recommendation, "discord_id" | "discord_name" | "discord_username">;
+
 /** Who ran the command: their id, the name they go by where they ran it, and their @handle. */
-function caller(
-  interaction: Interaction,
-): (Recommender & Pick<Recommendation, "discord_id">) | null {
+function caller(interaction: Interaction): Caller | null {
   const user = interaction.member?.user ?? interaction.user;
   if (!user) return null;
   return {

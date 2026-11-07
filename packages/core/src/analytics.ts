@@ -157,10 +157,20 @@ export function favoriteFilms(entries: LogEntry[]): LogEntry[] {
 export function groupRecs(recs: Recommendation[]): RecFilm[] {
   const byKey = new Map<string, RecFilm>();
   for (const r of recs) {
-    const who = { discord_name: r.discord_name, discord_username: r.discord_username };
+    const who = { discord_name: r.discord_name, discord_username: r.discord_username, created_at: r.created_at };
     const film = byKey.get(r.title_key);
     if (film) film.recommenders.push(who);
-    else byKey.set(r.title_key, { title: r.title, title_key: r.title_key, recommenders: [who], first_at: r.created_at });
+    else {
+      byKey.set(r.title_key, {
+        title: r.title,
+        title_key: r.title_key,
+        tmdb_id: r.tmdb_id,
+        film_year: r.film_year,
+        poster_url: r.poster_url,
+        recommenders: [who],
+        first_at: r.created_at,
+      });
+    }
   }
   return [...byKey.values()].sort(
     (a, b) => b.recommenders.length - a.recommenders.length || (a.first_at < b.first_at ? 1 : -1),

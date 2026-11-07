@@ -247,12 +247,16 @@ export async function addRecommendation(
   const result = await db
     .prepare(
       `INSERT OR IGNORE INTO recommendations
-         (title, title_key, discord_id, discord_name, discord_username, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+         (title, title_key, tmdb_id, film_year, poster_url,
+          discord_id, discord_name, discord_username, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       rec.title,
       rec.title_key,
+      rec.tmdb_id,
+      rec.film_year,
+      rec.poster_url,
       rec.discord_id,
       rec.discord_name,
       rec.discord_username,
@@ -270,6 +274,18 @@ export function getRecommendationsByKey(
   return db
     .prepare("SELECT * FROM recommendations WHERE title_key = ? ORDER BY created_at, id")
     .bind(titleKey)
+    .all<Recommendation>()
+    .then((r) => r.results);
+}
+
+/** One person's recs, oldest first — what /unrec picks from. */
+export function getRecommendationsByUser(
+  db: D1Database,
+  discordId: string,
+): Promise<Recommendation[]> {
+  return db
+    .prepare("SELECT * FROM recommendations WHERE discord_id = ? ORDER BY created_at, id")
+    .bind(discordId)
     .all<Recommendation>()
     .then((r) => r.results);
 }
